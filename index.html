@@ -2,15 +2,15 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="theme-color" content="#0c1d18" />
+    <meta name="theme-color" content="#0f2a43" />
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
-    <title>Bihar Agricultural Atlas</title>
+    <title>Bihar NFHS Atlas</title>
     <link
       rel="icon"
-      href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ctext y=%27.9em%27 font-size=%2790%27%3E🌾%3C/text%3E%3C/svg%3E"
+      href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ctext y=%27.9em%27 font-size=%2790%27%3E🏥%3C/text%3E%3C/svg%3E"
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -28,10 +28,10 @@
     <div class="app">
       <aside class="rail">
         <div class="brand">
-          <div class="logo">🌾</div>
+          <div class="logo">🏥</div>
           <div>
-            <h1>Bihar <span>Agricultural Atlas</span></h1>
-            <p>38 districts · Census 2011 boundaries</p>
+            <h1>Bihar <span>NFHS Atlas</span></h1>
+            <p>38 districts · NFHS-6 indicators</p>
           </div>
         </div>
         <div>
@@ -51,7 +51,7 @@
           <div class="lbl">Legend · click a class to isolate it</div>
           <div id="legend"></div>
         </div>
-        <div class="foot">WGS84 · Source: DataMeet dists11 · Data: BIPARD</div>
+        <div class="foot">WGS84 · Source: DataMeet dists11 · Data: NFHS-6</div>
       </aside>
 
       <main class="stage">
@@ -161,7 +161,7 @@
           <div class="card">
             <h3>
               <span
-                >Crop mix &amp; irrigation ·
+                >Family planning &amp; delivery care ·
                 <i id="cmt" style="font-style: normal; color: var(--g)"
                   >Bihar</i
                 ></span
@@ -200,7 +200,7 @@
             <div class="cmw"><table class="cx" id="cx"></table></div>
             <p class="hint2">
               Tap a cell to plot that pair in Explore · bold = statistically
-              significant (|r| ≥ 0.32, p &lt; 0.05) · teal = move together,
+              significant (|r| ≥ 0.32, p &lt; 0.05) · blue = move together,
               orange = move opposite
             </p>
           </div>

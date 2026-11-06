@@ -20,7 +20,7 @@
   var PW = 1400, PH = 990;              // logical page size (A4 landscape ratio)
   var SCALE = 2;                        // pixel density of the output (2800 x 1980)
   var FONT = "'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif";
-  var INK = '#0c1d18', MUTED = '#5f716a', LINE = '#dbe4de', GREEN = '#14664f', AMBER = '#e8a317';
+  var INK = '#0f2a43', MUTED = '#5c6f7d', LINE = '#dbe3ea', GREEN = '#165d78', AMBER = '#e8873a';
 
   // layout (logical px)
   var M = 40;                                                  // page margin
@@ -173,7 +173,7 @@
       c.fillStyle = INK; c.fillText(n, cx, cy);
       if (val) {
         c.font = font(800, fs + 0.5); c.strokeText(val, cx, cy + fs * 1.1);
-        c.fillStyle = '#0b4d3c'; c.fillText(val, cx, cy + fs * 1.1);
+        c.fillStyle = '#0b5a73'; c.fillText(val, cx, cy + fs * 1.1);
       }
     });
   }
@@ -318,30 +318,30 @@
   /* ------------------------------------------------- header, map, footer */
   function drawHeader(c) {
     var p = P(S.ind), g = c.createLinearGradient(M, 30, M + 38, 68);
-    g.addColorStop(0, '#e8a317'); g.addColorStop(1, '#1f8a6b');
+    g.addColorStop(0, '#e8873a'); g.addColorStop(1, '#1f7a9c');
     rrect(c, M, 30, 38, 38, 11); c.fillStyle = g; c.fill();
-    text(c, '🌾', M + 19, 56, font(400, 20), INK, 'center');
-    text(c, 'BIHAR AGRICULTURAL ATLAS', M + 52, 46, font(800, 13), GREEN);
-    text(c, 'District-level agriculture indicators · ' + names.length + ' districts', M + 52, 63, font(500, 12), MUTED);
+    text(c, '🏥', M + 19, 56, font(400, 20), INK, 'center');
+    text(c, 'BIHAR NFHS ATLAS', M + 52, 46, font(800, 13), GREEN);
+    text(c, 'District-level NFHS-6 indicators · ' + names.length + ' districts', M + 52, 63, font(500, 12), MUTED);
     text(c, 'Generated ' + today(), PW - M, 46, font(600, 12), MUTED, 'right');
 
     var t = fitted(c, p.base, PW - 2 * M, 800, 38, 24);
     text(c, t.str, M, 112, font(800, t.size), INK);
 
     var x = M, y = 124;
-    if (p.unit) x += pill(c, p.unit, x, y, 24, '#e3f1ea', '#14664f', 12.5) + 8;
-    if (p.year) x += pill(c, p.year, x, y, 24, '#e3f1ea', '#14664f', 12.5) + 8;
-    x += pill(c, catOf(S.ind), x, y, 24, '#e3f1ea', '#14664f', 12.5) + 8;
+    if (p.unit) x += pill(c, p.unit, x, y, 24, '#e3f1ea', '#165d78', 12.5) + 8;
+    if (p.year) x += pill(c, p.year, x, y, 24, '#e3f1ea', '#165d78', 12.5) + 8;
+    x += pill(c, catOf(S.ind), x, y, 24, '#e3f1ea', '#165d78', 12.5) + 8;
   }
 
   function drawFooter(c) {
     hr(c, M, PH - 56, PW - 2 * M);
-    text(c, 'Source: BIPARD (indicators) · DataMeet, Census 2011 (district boundaries)', M, PH - 34, font(600, 12), MUTED);
+    text(c, 'Source: NFHS-6 (MoHFW / IIPS) · DataMeet, Census 2011 (district boundaries)', M, PH - 34, font(600, 12), MUTED);
     var have = (S.vs || []).length, miss = names.length - have;
     text(c, miss > 0 ? 'Data available for ' + have + ' of ' + names.length + ' districts. Grey districts have no data.'
                      : 'Data available for all ' + names.length + ' districts.', M, PH - 16, font(500, 11.5), MUTED);
-    text(c, 'Bihar Agricultural Atlas', PW - M, PH - 34, font(700, 12), GREEN, 'right');
-    text(c, 'Data years vary by indicator (2012–2024)', PW - M, PH - 16, font(500, 11.5), MUTED, 'right');
+    text(c, 'Bihar NFHS Atlas', PW - M, PH - 34, font(700, 12), GREEN, 'right');
+    text(c, 'NFHS-6 district percentages (unweighted)', PW - M, PH - 16, font(500, 11.5), MUTED, 'right');
   }
 
   function drawMapPanel(c, o) {
@@ -421,7 +421,7 @@
     put(jpg); put('\nendstream\nendobj\n');
     var cs = 'q ' + pw + ' 0 0 ' + ph + ' 0 0 cm /Im0 Do Q';
     obj(5, '<< /Length ' + cs.length + ' >>\nstream\n' + cs + '\nendstream');
-    obj(6, '<< /Title (' + safe + ') /Creator (Bihar Agricultural Atlas) /Producer (Bihar Agricultural Atlas) >>');
+    obj(6, '<< /Title (' + safe + ') /Creator (Bihar NFHS Atlas) /Producer (Bihar NFHS Atlas) >>');
     var start = off, x = 'xref\n0 7\n0000000000 65535 f \n';
     for (var i = 1; i <= 6; i++) x += pad(xref[i]) + ' 00000 n \n';
     put(x + 'trailer\n<< /Size 7 /Root 1 0 R /Info 6 0 R >>\nstartxref\n' + start + '\n%%EOF\n');
@@ -436,7 +436,7 @@
   function savePDF(cv) {
     cv = cv || canvas || render();
     return toBlob(cv, 'image/jpeg', 0.93).then(bytesOf).then(function (jpg) {
-      save(pdfFromJpeg(jpg, cv.width, cv.height, 'Bihar Agricultural Atlas - ' + P(S.ind).base), fileName('pdf'));
+      save(pdfFromJpeg(jpg, cv.width, cv.height, 'Bihar NFHS Atlas - ' + P(S.ind).base), fileName('pdf'));
     });
   }
 

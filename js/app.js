@@ -1,106 +1,41 @@
-/* ---- v2: data cleaning + derived KPIs ---- */
-var FG = {},
-  PIL = {},
+/* ---- v3: NFHS-6 data + derived composite index ---- */
+var PIL = {},
   PN = [
-    "Irrigation",
-    "Intensity",
-    "Productivity",
-    "Outreach",
-    "Inclusion",
-    "Water-smart",
+    "Child nutrition",
+    "Delivery care",
+    "Immunization",
+    "Family planning",
+    "Antenatal care",
+    "Unmet need",
   ];
 (function () {
   var N = Object.keys(data),
     r2 = function (x) {
       return Math.round(x * 100) / 100;
     },
-    dv = function (a, b, m) {
-      return b > 0 ? r2((a / b) * (m || 1)) : undefined;
-    },
-    Z = [
-      "KCC Loans Disbursed (INR Lakhs)",
-      "Total MSME Registered Units",
-      "Agriculture GVA (INR Lakhs)",
-      "Total District GSDP (INR Lakhs)",
-      "Fertilizer Consumption (kg/ha)",
-      "Farm Mechanization (Tractors/1k ha)",
-    ],
-    PU = [
-      "Gram",
-      "Khesari",
-      "Kulthi",
-      "Lentil",
-      "Linseed",
-      "Moong Bean",
-      "Mustard",
-      "Pea",
-      "Pigeon pea",
-      "Sesamum",
-      "Sunflower",
-    ];
-  N.forEach(function (n) {
-    var d = data[n];
-    Z.forEach(function (k) {
-      if (d[k] === 0) delete d[k];
-    });
-    var G = d["Total Geographic Area (ha)"],
-      NS = d["Net Sown Area (ha)"],
-      NI = d["Net Irrigated Area (ha)"],
-      fa = d["Rice Area (ha)"] + d["Wheat Area (ha)"] + d["Maize Area (ha)"],
-      fp =
-        d["Rice Production (MT)"] +
-        d["Wheat Production (MT)"] +
-        d["Maize Production (MT)"];
-    FG[n] = [fp, fa];
-    d["Net Sown Area (% of Geo Area)"] = dv(NS, G, 100);
-    d["Foodgrain Production (MT)"] = fp;
-    d["Foodgrain Productivity (MT/ha)"] = dv(fp, fa);
-    ["Rice", "Wheat", "Maize"].forEach(function (c) {
-      d[c + " Yield (MT/ha)"] =
-        d[c + " Area (ha)"] >= 500
-          ? dv(d[c + " Production (MT)"], d[c + " Area (ha)"])
-          : undefined;
-    });
-    d["Irrigation Coverage (% of Cropland)"] = dv(NI, NS, 100);
-    d["Fallow Share (% of Geo Area)"] = dv(
-      d["Total Fallow Land (ha, 2022-23)"],
-      G,
-      100,
-    );
-    d["Tubewell Dependence (% of Irrigation)"] = dv(
-      d["Net Irrigated Area - Tubewell (ha, 2022-23)"],
-      NI,
-      100,
-    );
-    d["Female DBT Share (%)"] = dv(
-      d["DBT Farmers Female"],
-      d["DBT Farmers Male"] + d["DBT Farmers Female"],
-      100,
-    );
-    d["Pulses & Oilseeds Area (ha, 2023-24)"] = PU.reduce(function (a, c) {
-      return a + (d[c + " Area (ha, 2023-24)"] || 0);
-    }, 0);
-    d["Horticulture Share (% of GCA)"] = dv(
-      d["Horticulture Area (ha, 2022)"],
-      d["Gross Cropped Area (ha)"],
-      100,
-    );
-    d["Milk per Cattle (kg)"] = dv(
-      d["Milk Production (Bovine, Tonnes, 2017-18)"] * 1000,
-      d["Cattle Population (2012)"],
-    );
-  });
-  var PK = [
-      ["Irrigation Coverage (% of Cropland)", 1],
-      ["Cropping Intensity (%)", 1],
-      ["Foodgrain Productivity (MT/ha)", 1],
-      ["Farmers per Officer", -1],
-      ["Female DBT Share (%)", 1],
-      ["Farmers Using Drip/Sprinkler (%)", 1],
-    ],
     ok = function (v) {
       return typeof v === "number" && !isNaN(v);
     };
+  N.forEach(function (n) {
+    var d = data[n],
+      mod =
+        (d["Any modern method2 (%)"] || 0) -
+        (d["Female sterilization (%)"] || 0) -
+        (d["Male sterilization (%)"] || 0),
+      inst = d["Institutional births (%)"] || 0,
+      pub = d["Institutional births in public facility (%)"] || 0;
+    d["Other modern methods (%)"] = r2(Math.max(0, mod));
+    d["Home births (%)"] = r2(Math.max(0, 100 - inst));
+    d["Private facility births (%)"] = r2(Math.max(0, inst - pub));
+  });
+  var PK = [
+      ["Children under 5 years who are stunted (height-for-age)12 (%)", -1],
+      ["Institutional births (%)", 1],
+      ["Children age 12-23 months fully vaccinated based on information from either vaccination card or mother's recall6 (%)", 1],
+      ["Any modern method2 (%)", 1],
+      ["Mothers who had at least 4 antenatal care visits (%)", 1],
+      ["Total unmet need3 (%)", -1],
+    ];
   PK.forEach(function (p, j) {
     var a = N.map(function (n) {
       return data[n][p[0]];
@@ -122,7 +57,7 @@ var FG = {},
     });
   });
   N.forEach(function (n) {
-    data[n]["Agri Performance Index (0-100)"] = r2(
+    data[n]["NFHS Composite Index (0-100)"] = r2(
       PIL[n].reduce(function (a, b) {
         return a + b;
       }, 0) / 6,
@@ -142,9 +77,9 @@ var FG = {},
 var $ = function (s) {
   return document.querySelector(s);
 };
-var PAL = ["#f6f3cf", "#d4e79e", "#8ccf8a", "#38a38f", "#116a7b"],
-  ACC = "#e8a317",
-  INK = "#0c1d18";
+var PAL = ["#f4f9fd", "#d3e7f4", "#93c4df", "#4a94c4", "#14537e"],
+  ACC = "#e8873a",
+  INK = "#0f2a43";
 var names = Object.keys(data).sort(),
   LY = {},
   LAB = L.layerGroup();
@@ -166,25 +101,40 @@ var S = {
   max: 0,
 };
 var CATS = [
-  ["Index", /Performance Index/],
+  ["Index", /Composite Index/],
   [
-    "Land",
-    /Geographic|Sown|Cropped|Forest|Non-Agri|Barren|Pastures|Groves|Waste|Fallow|Cropping/,
+    "Households & Population",
+    /Population|electricity|drinking-water|iodized salt|health insurance|bank account\/post office|ever attended school|owning a house|pre-school/,
   ],
-  ["Water", /Irrigat|Rainfall|Groundwater|Drip/],
+  ["Education & Internet", /years of schooling|internet/],
   [
-    "Crops",
-    /Rice|Wheat|Maize|Barley|Gram|Khesari|Kulthi|Lentil|Linseed|Moong|Mustard|Pea |Pigeon|Ragi|Sesamum|millets|Sunflower|Horticulture|Pulses|Foodgrain/,
-  ],
-  [
-    "Farmers",
-    /DBT|Krishi|Kisan|Registry|Officer|Staff|FPO|Seed|Haat|Hiring|Extension|Fertilizer Shops/,
+    "Marriage & Fertility",
+    /married before|Three or more births|already mothers or pregnant/,
   ],
   [
-    "Machinery",
-    /Implement|Pumpset|Tiller|Thresher|Combine|Mechani|Diesel|Fertilizer Consumption|SMAM/,
+    "Family Planning",
+    /method2|traditional method|sterilization|unmet need|Unmet need/,
   ],
-  ["Economy", /Cattle|Milk|KCC|MSME|GVA|GSDP/],
+  [
+    "Maternal Health",
+    /antenatal|neonatal tetanus|iron folic|Mother and Child Protection|Institutional births|caesarean|skilled health|postnatal|check-up within 24 hours/,
+  ],
+  [
+    "Child Health",
+    /vaccinated|received.*vaccine|BCG|polio|pentavalent|measles|hepatitis B|rotavirus|vitamin A|vaccinations in a|diarrhoea|acute respiratory infection|fever or symptoms of ARI/,
+  ],
+  [
+    "Nutrition",
+    /breastfed|breastfeeding|solid or semi-solid|adequate diet|stunted|wasted|underweight|overweight|Body Mass Index/,
+  ],
+  [
+    "Adult Health",
+    /Blood sugar|blood pressure|tobacco|alcohol/,
+  ],
+  [
+    "Women's Empowerment",
+    /bank or savings account that they themselves use|mobile phone that they themselves use|hygienic methods of protection/,
+  ],
 ];
 function catOf(i) {
   for (var k = 0; k < CATS.length; k++)
@@ -214,14 +164,21 @@ function fmtC(v) {
   return fmt(v);
 }
 function P(i) {
-  var m = /^(.*?)\s*\((.*)\)\s*$/.exec(i);
-  if (!m) return { base: i, unit: "", year: "" };
+  var sex = "";
+  i = i.replace(/\s*\((Women|Men)\)\s*$/, function (x, s) {
+    sex = s;
+    return "";
+  });
+  var m = /^(.*?)\s*\(([^()]*)\)\s*$/.exec(i);
+  if (!m) return { base: i, unit: sex, year: "" };
   var p = m[2].split(",").map(function (s) {
       return s.trim();
     }),
     y = "";
   if (/^\d{4}/.test(p[p.length - 1])) y = p.pop();
-  return { base: m[1], unit: p.join(", "), year: y };
+  var unit = p.join(", ");
+  if (sex) unit = (unit ? unit + " · " : "") + sex;
+  return { base: m[1], unit: unit, year: y };
 }
 function isAdd(i) {
   return !/%|\/ha|\/1k|per |\(mm\)|Density|Intensity|Stage|Index/i.test(i);
@@ -281,7 +238,7 @@ function classOf(v) {
 }
 function colorOf(v) {
   var c = classOf(v);
-  return c < 0 ? "#cfd6d1" : S.cols[c];
+  return c < 0 ? "#c7d2d9" : S.cols[c];
 }
 
 /* ---- map ---- */
@@ -294,44 +251,44 @@ var map = L.map("map", {
 });
 L.control.zoom({ position: "bottomright" }).addTo(map);
 var PD = [
-  "#F6F3CF",
-  "#8ACE8A",
-  "#116778",
-  "#D6E8A1",
-  "#3AA48F",
-  "#0B3A45",
-  "#94D28C",
-  "#146F7D",
-  "#DAE9A7",
-  "#46AA8E",
-  "#0C404C",
-  "#9ED58F",
-  "#19767F",
-  "#DFEBAE",
-  "#51B08E",
-  "#0D4754",
-  "#A7D892",
-  "#1F7E82",
-  "#E4EDB5",
-  "#5CB68D",
-  "#0D4D5B",
-  "#B1DB94",
-  "#248685",
-  "#E8EEBB",
-  "#68BC8C",
-  "#0E5462",
-  "#BBDF97",
-  "#298D87",
-  "#EDF0C2",
-  "#73C28B",
-  "#0F5A69",
-  "#C4E29A",
-  "#2F958A",
-  "#F1F1C8",
-  "#7EC88B",
-  "#106171",
-  "#CEE59C",
-  "#349D8D",
+  "#bf4040",
+  "#40bf65",
+  "#8a40bf",
+  "#bfaf40",
+  "#40aabf",
+  "#bf4085",
+  "#60bf40",
+  "#4540bf",
+  "#bf6a40",
+  "#40bf90",
+  "#b540bf",
+  "#a5bf40",
+  "#407fbf",
+  "#bf405a",
+  "#40bf4b",
+  "#7040bf",
+  "#bf9540",
+  "#40bfba",
+  "#bf409f",
+  "#7abf40",
+  "#4055bf",
+  "#bf5040",
+  "#40bf75",
+  "#9a40bf",
+  "#bfbf40",
+  "#409abf",
+  "#bf4074",
+  "#4fbf40",
+  "#5540bf",
+  "#bf7b40",
+  "#40bfa0",
+  "#bf40b9",
+  "#94bf40",
+  "#406fbf",
+  "#bf404a",
+  "#40bf5b",
+  "#8040bf",
+  "#bfa540",
 ];
 function dcol(n) {
   var i = names.indexOf(n);
@@ -346,7 +303,7 @@ function styleFor(n) {
     fillColor: colorOf(v),
     fillOpacity: dim || (SCR && SCR.indexOf(n) < 0) ? 0.1 : 0.92,
     weight: sel ? 3.5 : ci >= 0 ? 3 : 0.9,
-    color: sel ? ACC : ci >= 0 ? dcol(n) : "#2b4a40",
+    color: sel ? ACC : ci >= 0 ? dcol(n) : "#2b4a5c",
     opacity: sel || ci >= 0 ? 1 : 0.55,
     dashArray: ci >= 0 ? "7 5" : null,
   };
@@ -689,7 +646,7 @@ function legend() {
   });
   if (nd)
     h +=
-      '<div class="lg" style="cursor:default"><i style="background:#cfd6d1"></i>No data<b>' +
+      '<div class="lg" style="cursor:default"><i style="background:#c7d2d9"></i>No data<b>' +
       nd +
       "</b></div>";
   $("#legend").innerHTML = h;
@@ -842,7 +799,7 @@ function insights() {
 
 /* ---- charts ---- */
 Chart.defaults.font.family = "'Plus Jakarta Sans',system-ui,sans-serif";
-Chart.defaults.color = "#6a7a73";
+Chart.defaults.color = "#6a7c8a";
 var tipBox = {
   backgroundColor: INK,
   padding: 10,
@@ -876,7 +833,7 @@ var DP = {
         y = Y.getPixelForValue(p[1]);
       i ? c.lineTo(x, y) : c.moveTo(x, y);
     });
-    c.strokeStyle = "#0c1d18";
+    c.strokeStyle = "#0f2a43";
     c.lineWidth = 2.2;
     c.lineJoin = "round";
     c.stroke();
@@ -1029,7 +986,7 @@ var hist = new Chart($("#hist"), {
       y: {
         beginAtZero: true,
         ticks: { precision: 0 },
-        grid: { color: "#eef2ee" },
+        grid: { color: "#eef3f8" },
       },
     },
   },
@@ -1069,7 +1026,7 @@ var topChart = new Chart($("#top"), {
     scales: {
       x: {
         beginAtZero: true,
-        grid: { color: "#eef2ee" },
+        grid: { color: "#eef3f8" },
         ticks: {
           callback: function (v) {
             return fmtC(v);
@@ -1103,7 +1060,7 @@ function charts() {
     lab.push(fmtC(lo));
     rg.push(fmtC(lo) + " – " + fmtC(hi));
     col.push(i === sb ? ACC : S.cols[Math.max(0, classOf((lo + hi) / 2))]);
-    bd.push(i === sb ? "#a56f00" : "rgba(43,74,64,.4)");
+    bd.push(i === sb ? "#b35f00" : "rgba(43,74,64,.4)");
   }
   S.vs.forEach(function (v) {
     cnt[Math.min(B - 1, Math.floor((v - S.min) / w))]++;
@@ -1137,7 +1094,7 @@ function charts() {
       return n === S.sel ? ACC : colorOf(V(n));
     }),
     borderColor: a.map(function (n) {
-      return n === S.sel ? "#a56f00" : "rgba(43,74,64,.4)";
+      return n === S.sel ? "#b35f00" : "rgba(43,74,64,.4)";
     }),
     borderWidth: 1,
     borderRadius: 6,
@@ -1156,14 +1113,14 @@ $("#seg").onclick = function (e) {
 
 /* ---- profile ---- */
 var KEY = [
-  "Total Geographic Area (ha)",
-  "Annual Rainfall (mm)",
-  "Net Sown Area (ha)",
-  "Cropping Intensity (%)",
-  "Net Irrigated Area (ha)",
-  "Rice Production (MT)",
-  "Wheat Production (MT)",
-  "Maize Production (MT)",
+  "Institutional births (%)",
+  "Mothers who had at least 4 antenatal care visits (%)",
+  "Children age 12-23 months fully vaccinated based on information from either vaccination card or mother's recall6 (%)",
+  "Any modern method2 (%)",
+  "Total unmet need3 (%)",
+  "Children under 5 years who are stunted (height-for-age)12 (%)",
+  "Women with 10 or more years of schooling (%)",
+  "NFHS Composite Index (0-100)",
 ];
 function renderProfile() {
   var el = $("#p-district"),
@@ -1262,7 +1219,7 @@ function renderProfile() {
       : "") +
     (S.cm.length ? '<button class="cclr" data-rm="*">Clear</button>' : "") +
     "</div></div>" +
-    '<div class="lbl" style="color:#6a7a73;margin:4px 0 0">At a glance · tap to map it</div>' +
+    '<div class="lbl" style="color:#6a7c8a;margin:4px 0 0">At a glance · tap to map it</div>' +
     '<div class="pf"><input id="pfi" type="search" placeholder="Filter indicators…" aria-label="Filter indicators" value="' +
     (S.pf || "").replace(/"/g, "&quot;") +
     '"><span class="seg" id="pfs">' +
@@ -1761,74 +1718,84 @@ document.addEventListener("keydown", function (e) {
 var fmtV = function (v) {
   return Math.abs(v) >= 1000 ? fmtC(v) : fmt(v);
 };
+var RLAB = {
+  "NFHS Composite Index (0-100)": "Composite index",
+  "Institutional births (%)": "Institutional births",
+  "Children age 12-23 months fully vaccinated based on information from either vaccination card or mother's recall6 (%)": "Full immunization",
+  "Children under 5 years who are stunted (height-for-age)12 (%)": "Child stunting",
+  "Any modern method2 (%)": "Modern contraceptive use",
+  "Mothers who had at least 4 antenatal care visits (%)": "4+ ANC visits",
+  "Total unmet need3 (%)": "Unmet need",
+  "Women with 10 or more years of schooling (%)": "Women 10+ yrs schooling",
+};
 var RC = [
   [
-    "🌾",
-    "Foodgrain Production (MT)",
+    "🏆",
+    "NFHS Composite Index (0-100)",
     function (n) {
-      return [FG[n][0]];
+      return [data[n]["NFHS Composite Index (0-100)"], 1];
     },
   ],
   [
-    "📐",
-    "Net Sown Area (ha)",
+    "🏥",
+    "Institutional births (%)",
     function (n) {
-      return [data[n]["Net Sown Area (ha)"]];
+      return [data[n]["Institutional births (%)"], 1];
     },
   ],
   [
-    "🔁",
-    "Cropping Intensity (%)",
+    "💉",
+    "Children age 12-23 months fully vaccinated based on information from either vaccination card or mother's recall6 (%)",
     function (n) {
       return [
-        data[n]["Gross Cropped Area (ha)"],
-        data[n]["Net Sown Area (ha)"],
-        100,
+        data[n][
+          "Children age 12-23 months fully vaccinated based on information from either vaccination card or mother's recall6 (%)"
+        ],
+        1,
       ];
     },
   ],
   [
-    "💧",
-    "Irrigation Coverage (% of Cropland)",
+    "🧒",
+    "Children under 5 years who are stunted (height-for-age)12 (%)",
     function (n) {
       return [
-        data[n]["Net Irrigated Area (ha)"],
-        data[n]["Net Sown Area (ha)"],
-        100,
+        data[n]["Children under 5 years who are stunted (height-for-age)12 (%)"],
+        1,
       ];
-    },
-  ],
-  [
-    "⚡",
-    "Foodgrain Productivity (MT/ha)",
-    function (n) {
-      return [FG[n][0], FG[n][1]];
-    },
-  ],
-  [
-    "👩‍🌾",
-    "Female DBT Share (%)",
-    function (n) {
-      return [
-        data[n]["DBT Farmers Female"],
-        data[n]["DBT Farmers Male"] + data[n]["DBT Farmers Female"],
-        100,
-      ];
-    },
-  ],
-  [
-    "🧑‍🔧",
-    "Farmers per Officer",
-    function (n) {
-      return [data[n]["DBT Farmers (count)"], data[n]["Field Officers"]];
     },
     1,
   ],
   [
-    "🏆",
-    "Agri Performance Index (0-100)",
+    "💊",
+    "Any modern method2 (%)",
     function (n) {
-      return [data[n]["Agri Performance Index (0-100)"], 1];
+      return [data[n]["Any modern method2 (%)"], 1];
+    },
+  ],
+  [
+    "🤰",
+    "Mothers who had at least 4 antenatal care visits (%)",
+    function (n) {
+      return [
+        data[n]["Mothers who had at least 4 antenatal care visits (%)"],
+        1,
+      ];
+    },
+  ],
+  [
+    "⚠️",
+    "Total unmet need3 (%)",
+    function (n) {
+      return [data[n]["Total unmet need3 (%)"], 1];
+    },
+    1,
+  ],
+  [
+    "🎓",
+    "Women with 10 or more years of schooling (%)",
+    function (n) {
+      return [data[n]["Women with 10 or more years of schooling (%)"], 1];
     },
   ],
 ];
@@ -1872,7 +1839,7 @@ function ribBuild() {
       '"><div class="rt"><span>' +
       r.ic +
       " " +
-      P(r.k).base.replace(/ \(.*/, "") +
+      (RLAB[r.k] || P(r.k).base.replace(/ \(.*/, "")) +
       '</span><i>Bihar</i></div><div class="rv"><b class="n">0</b><small>' +
       P(r.k).unit +
       '</small></div><div class="rl"></div><svg class="sp" viewBox="0 0 100 24" preserveAspectRatio="none">' +
@@ -1968,7 +1935,7 @@ function radar() {
   if (!n || !PIL[n]) return;
   var h = el.querySelector(".hero");
   if (!h) return;
-  var K = "Agri Performance Index (0-100)",
+  var K = "NFHS Composite Index (0-100)",
     pl = PIL[n],
     mx = 0,
     mi = 0;
@@ -2048,35 +2015,32 @@ function radar() {
           min: 0,
           max: 100,
           ticks: { display: false, stepSize: 25 },
-          grid: { color: "#dfe7e2" },
-          angleLines: { color: "#dfe7e2" },
-          pointLabels: { font: { size: 11, weight: "700" }, color: "#3d4f48" },
+          grid: { color: "#e2e8ee" },
+          angleLines: { color: "#e2e8ee" },
+          pointLabels: { font: { size: 11, weight: "700" }, color: "#3d4f5c" },
         },
       },
     },
   });
 }
 
-/* crop mix + irrigation donuts */
+/* family planning + delivery care donuts */
 var mixC = null,
   irrC = null;
 var CA = [
-    ["Rice", "Rice Area (ha)", "#1f8a6b"],
-    ["Wheat", "Wheat Area (ha)", "#e8a317"],
-    ["Maize", "Maize Area (ha)", "#f08a4b"],
-    ["Pulses & oilseeds", "Pulses & Oilseeds Area (ha, 2023-24)", "#8a6fd1"],
-    ["Horticulture", "Horticulture Area (ha, 2022)", "#3b9ae1"],
+    ["Female sterilization", "Female sterilization (%)", "#1f7a9c"],
+    ["Male sterilization", "Male sterilization (%)", "#e8873a"],
+    ["Other modern", "Other modern methods (%)", "#4a94c4"],
+    ["Traditional", "Any traditional method (%)", "#9aa9a2"],
   ],
   IA = [
-    ["Canal", "Net Irrigated Area - Govt Canal (ha, 2022-23)", "#3b9ae1"],
-    ["Tubewell", "Net Irrigated Area - Tubewell (ha, 2022-23)", "#1f8a6b"],
-    ["Pond", "Net Irrigated Area - Pond (ha, 2022-23)", "#5cc8d7"],
     [
-      "Other wells",
-      "Net Irrigated Area - Other Wells (ha, 2022-23)",
-      "#8a6fd1",
+      "Public facility",
+      "Institutional births in public facility (%)",
+      "#1f7a9c",
     ],
-    ["Other", "Net Irrigated Area - Other Resources (ha, 2022-23)", "#b0bdb6"],
+    ["Private facility", "Private facility births (%)", "#e8873a"],
+    ["Home", "Home births (%)", "#9aa9a2"],
   ];
 function dn(c, id, A) {
   var ns = S.sel ? [S.sel] : names,
@@ -2128,9 +2092,9 @@ function dn(c, id, A) {
                     i.label +
                     ": " +
                     fmtC(i.raw) +
-                    " ha (" +
+                    " pts (" +
                     ((i.raw / c._t) * 100).toFixed(0) +
-                    "%)"
+                    "% of mix)"
                   );
                 },
               },
@@ -2157,18 +2121,30 @@ function comp() {
 /* relationship explorer */
 var PRE = [
     [
-      "💧 Water → Yield",
-      "Irrigation Coverage (% of Cropland)",
-      "Foodgrain Productivity (MT/ha)",
+      "💉 Immunization → child nutrition",
+      "Children age 12-23 months fully vaccinated based on information from either vaccination card or mother's recall6 (%)",
+      "Children under 5 years who are stunted (height-for-age)12 (%)",
     ],
-    ["🔁 Land use", "Cropping Intensity (%)", "Fallow Share (% of Geo Area)"],
-    ["🧑‍🔧 Farmer reach", "Farmers per Officer", "Female DBT Share (%)"],
     [
-      "🚰 Groundwater",
-      "Groundwater Extraction Stage (%)",
-      "Tubewell Dependence (% of Irrigation)",
+      "🤰 ANC → delivery",
+      "Mothers who had at least 4 antenatal care visits (%)",
+      "Institutional births (%)",
     ],
-    ["🌧️ Rain → Rice", "Annual Rainfall (mm)", "Rice Yield (MT/ha)"],
+    [
+      "👰 Child marriage → teen motherhood",
+      "Women age 20-24 years married before age 18 years (%)",
+      "Women age 15-19 years who were already mothers or pregnant at the time of the survey (%)",
+    ],
+    [
+      "📚 Schooling → internet",
+      "Women with 10 or more years of schooling (%)",
+      "Women who have ever used the internet (%)",
+    ],
+    [
+      "⚠️ Unmet need → modern use",
+      "Total unmet need3 (%)",
+      "Any modern method2 (%)",
+    ],
   ],
   XS = { x: PRE[0][1], y: PRE[0][2] },
   sc = null,
@@ -2231,8 +2207,7 @@ function pear(p) {
 }
 function drawSc() {
   if ($("#p-explore").hidden) return;
-  var NA = "Net Sown Area (ha)",
-    p = names
+  var p = names
       .filter(function (n) {
         return V(n, XS.x) !== null && V(n, XS.y) !== null;
       })
@@ -2240,13 +2215,6 @@ function drawSc() {
         return { x: V(n, XS.x), y: V(n, XS.y), n: n };
       }),
     st = pear(p),
-    mx =
-      Math.max.apply(
-        null,
-        p.map(function (q) {
-          return V(q.n, NA) || 0;
-        }),
-      ) || 1,
     xs = p.map(function (q) {
       return q.x;
     }),
@@ -2261,13 +2229,13 @@ function drawSc() {
       return on(q) ? ACC : colorOf(V(q.n));
     }),
     borderColor: p.map(function (q) {
-      return on(q) ? "#a56f00" : "#2b4a40";
+      return on(q) ? "#b35f00" : "#2b4a5c";
     }),
     borderWidth: p.map(function (q) {
       return on(q) ? 3 : 1;
     }),
     pointRadius: p.map(function (q) {
-      return on(q) ? 12 : 4 + Math.sqrt((V(q.n, NA) || 0) / mx) * 8;
+      return on(q) ? 12 : 5;
     }),
     pointHoverRadius: 13,
   };
@@ -2320,7 +2288,7 @@ function drawSc() {
               text: "",
               font: { size: 11, weight: "700" },
             },
-            grid: { color: "#eef2ee" },
+            grid: { color: "#eef3f8" },
             ticks: {
               callback: function (v) {
                 return fmtC(v);
@@ -2333,7 +2301,7 @@ function drawSc() {
               text: "",
               font: { size: 11, weight: "700" },
             },
-            grid: { color: "#eef2ee" },
+            grid: { color: "#eef3f8" },
             ticks: {
               callback: function (v) {
                 return fmtC(v);
@@ -2425,7 +2393,7 @@ function drawSc() {
     lo.n +
     '">' +
     lo.n +
-    '</button></p><p style="color:var(--mut);font-size:11px">Bubble size = net sown area · colour = current map indicator · dashed = state means · gold line = trend</p>';
+    '</button></p><p style="color:var(--mut);font-size:11px">Colour = current map indicator · dashed = state means · orange line = trend</p>';
 }
 $("#xx").onchange = function () {
   XS.x = this.value;
@@ -2614,7 +2582,7 @@ function related() {
       })
       .slice(0, 4);
   function row(a) {
-    var c = a[1] > 0 ? "#1f8a6b" : "#d9480f";
+    var c = a[1] > 0 ? "#1f7a9c" : "#d9480f";
     return (
       '<button class="rx1" data-k="' +
       a[0] +
@@ -2654,16 +2622,16 @@ $("#rx").onclick = function (e) {
   tab("explore");
 };
 var MK = [
-    ["Index", "Agri Performance Index (0-100)"],
-    ["Irrigation", "Irrigation Coverage (% of Cropland)"],
-    ["Intensity", "Cropping Intensity (%)"],
-    ["Productivity", "Foodgrain Productivity (MT/ha)"],
-    ["Fertilizer", "Fertilizer Consumption (kg/ha)"],
-    ["Groundwater", "Groundwater Extraction Stage (%)"],
-    ["Rainfall", "Annual Rainfall (mm)"],
-    ["Female DBT", "Female DBT Share (%)"],
-    ["Farmers/Officer", "Farmers per Officer"],
-    ["Drip/Sprinkler", "Farmers Using Drip/Sprinkler (%)"],
+    ["Index", "NFHS Composite Index (0-100)"],
+    ["Institutional births", "Institutional births (%)"],
+    ["4+ ANC", "Mothers who had at least 4 antenatal care visits (%)"],
+    ["Full immunization", "Children age 12-23 months fully vaccinated based on information from either vaccination card or mother's recall6 (%)"],
+    ["Modern method", "Any modern method2 (%)"],
+    ["Unmet need", "Total unmet need3 (%)"],
+    ["Stunting", "Children under 5 years who are stunted (height-for-age)12 (%)"],
+    ["Women 10+ schooling", "Women with 10 or more years of schooling (%)"],
+    ["Women internet", "Women who have ever used the internet (%)"],
+    ["Public births", "Institutional births in public facility (%)"],
   ].filter(function (a) {
     return ALL.indexOf(a[1]) >= 0;
   }),
@@ -2704,8 +2672,8 @@ function matrix() {
             var m = Math.abs(r),
               bg =
                 i === j
-                  ? "#e8eeea"
-                  : (r > 0 ? "rgba(31,138,107," : "rgba(217,72,15,") +
+                  ? "#e8eef2"
+                  : (r > 0 ? "rgba(31,122,156," : "rgba(217,72,15,") +
                     (0.1 + 0.82 * m) +
                     ")";
             return (
@@ -2718,7 +2686,7 @@ function matrix() {
               '" style="background:' +
               bg +
               ";color:" +
-              (m > 0.55 && i !== j ? "#fff" : "#17282a") +
+              (m > 0.55 && i !== j ? "#fff" : "#15242e") +
               '" title="' +
               a[0] +
               " vs " +
@@ -2751,12 +2719,12 @@ $("#cx").onclick = function (e) {
 
 /* review additions: scoreboard, priority districts, regional view, what-if */
 var PKM = [
-    ["Irrigation", "Irrigation Coverage (% of Cropland)", 1, "%"],
-    ["Intensity", "Cropping Intensity (%)", 1, "%"],
-    ["Productivity", "Foodgrain Productivity (MT/ha)", 1, " MT/ha"],
-    ["Outreach", "Farmers per Officer", -1, " farmers/officer"],
-    ["Inclusion", "Female DBT Share (%)", 1, "%"],
-    ["Water-smart", "Farmers Using Drip/Sprinkler (%)", 1, "%"],
+    ["Child nutrition", "Children under 5 years who are stunted (height-for-age)12 (%)", -1, "%"],
+    ["Delivery care", "Institutional births (%)", 1, "%"],
+    ["Immunization", "Children age 12-23 months fully vaccinated based on information from either vaccination card or mother's recall6 (%)", 1, "%"],
+    ["Family planning", "Any modern method2 (%)", 1, "%"],
+    ["Antenatal care", "Mothers who had at least 4 antenatal care visits (%)", 1, "%"],
+    ["Unmet need", "Total unmet need3 (%)", -1, "%"],
   ],
   NORTH = [
     "Araria",
@@ -2781,7 +2749,7 @@ var PKM = [
     "Supaul",
     "Vaishali",
   ],
-  IXK = "Agri Performance Index (0-100)",
+  IXK = "NFHS Composite Index (0-100)",
   sumA = function (a) {
     return a.reduce(function (x, y) {
       return x + y;
@@ -2910,7 +2878,7 @@ function region() {
         names.filter(function (n) {
           return NORTH.indexOf(n) < 0;
         }),
-        "#e8a317",
+        "#e8873a",
       ],
     ],
     add = isAdd(S.ind),
@@ -3008,11 +2976,11 @@ function region() {
             min: 0,
             max: 100,
             ticks: { display: false, stepSize: 25 },
-            grid: { color: "#dfe7e2" },
-            angleLines: { color: "#dfe7e2" },
+            grid: { color: "#e2e8ee" },
+            angleLines: { color: "#e2e8ee" },
             pointLabels: {
               font: { size: 11, weight: "700" },
-              color: "#3d4f48",
+              color: "#3d4f5c",
             },
           },
         },
@@ -3133,23 +3101,23 @@ var SCR = null,
     .join("");
 })();
 var PRS = [
-  ["💧 Water-stressed", [["Groundwater Extraction Stage (%)", "ge", 70]]],
+  ["⚠️ High unmet need", [["Total unmet need3 (%)", "q4"]]],
   [
-    "🌾 Low yield + low irrigation",
-    [
-      ["Foodgrain Productivity (MT/ha)", "be"],
-      ["Irrigation Coverage (% of Cropland)", "be"],
-    ],
+    "🍼 High child stunting",
+    [["Children under 5 years who are stunted (height-for-age)12 (%)", "q4"]],
   ],
-  ["🧑‍🔧 Stretched extension", [["Farmers per Officer", "q4"]]],
   [
-    "🥦 Diversify: low horticulture, good irrigation",
-    [
-      ["Horticulture Share (% of GCA)", "q1"],
-      ["Irrigation Coverage (% of Cropland)", "ab"],
-    ],
+    "🏥 Low institutional births",
+    [["Institutional births (%)", "q1"]],
   ],
-  ["🏆 Index leaders", [["Agri Performance Index (0-100)", "q4"]]],
+  [
+    "💉 Low immunization",
+    [["Children age 12-23 months fully vaccinated based on information from either vaccination card or mother's recall6 (%)", "q1"]],
+  ],
+  [
+    "👰 High child marriage",
+    [["Women age 20-24 years married before age 18 years (%)", "q4"]],
+  ],
 ];
 $("#scp").innerHTML = PRS.map(function (p, i) {
   return '<button class="pc2" data-p="' + i + '">' + p[0] + "</button>";
@@ -3325,9 +3293,9 @@ function brief(n) {
     h =
       "<h1>" +
       (n ? n + " district brief" : "Bihar state brief") +
-      '</h1><div class="m">Bihar Agricultural Atlas · generated ' +
+      '</h1><div class="m">Bihar NFHS Atlas · generated ' +
       d +
-      " · Source: BIPARD; boundaries: DataMeet (Census 2011)</div>";
+      " · Source: NFHS-6 (MoHFW / IIPS); boundaries: DataMeet (Census 2011)</div>";
   var kr = RV.map(function (r) {
     var has = n && r.v[n] !== undefined,
       v = has ? r.v[n] : r.st,
@@ -3342,7 +3310,7 @@ function brief(n) {
         : "";
     return (
       "<tr><td>" +
-      P(r.k).base +
+      (RLAB[r.k] || P(r.k).base) +
       "</td><td><b>" +
       fmtV(v) +
       "</b> " +
@@ -3371,7 +3339,7 @@ function brief(n) {
     h +=
       '<div class="sum"><b>' +
       ix +
-      "</b> Agri Performance Index · rank <b>" +
+      "</b> NFHS Composite Index · rank <b>" +
       rankOf(n, IXK) +
       "</b> of " +
       names.length +
@@ -3515,7 +3483,7 @@ function brief(n) {
       "</table>";
   }
   h +=
-    '<div class="ft">Index = equal-weight average of six pillar percentiles. Data years vary by indicator (2012–2024). Percentile scores are relative to the other 37 districts, not absolute targets. See About in the Atlas for full methodology and data caveats.</div>';
+    '<div class="ft">Index = equal-weight average of six outcome pillar percentiles. District values are NFHS-6 percentages (unweighted), so small-sample districts can swing rankings. Percentile scores are relative to the other 37 districts, not absolute health targets. See About in the Atlas for full methodology and data caveats.</div>';
   $("#brief").innerHTML = h;
   setTimeout(function () {
     try {
@@ -3539,12 +3507,12 @@ function about() {
       return a[1] - b[1];
     });
   $("#abx").innerHTML =
-    '<button class="cl" id="abc" aria-label="Close">✕</button><h2>About this atlas</h2><p>District-level agriculture indicators for Bihar (' +
+    '<button class="cl" id="abc" aria-label="Close">✕</button><h2>About this atlas</h2><p>District-level NFHS-6 indicators for Bihar (' +
     names.length +
     " districts, " +
     ALL.length +
-    " indicators), built for review meetings and planning. Source: BIPARD; boundaries: DataMeet (Census 2011).</p>" +
-    "<h4>Agri Performance Index (0–100)</h4><p>Each district gets a percentile score (0–100) on six pillars versus the other districts; the index is their simple average. It shows relative standing, not distance from a target.</p><table><tr><th>Pillar</th><th>Indicator</th><th>Better when</th></tr>" +
+    " indicators), built for health review and planning. Source: NFHS-6 (MoHFW / IIPS); boundaries: DataMeet (Census 2011).</p>" +
+    "<h4>NFHS Composite Index (0–100)</h4><p>Each district gets a percentile score (0–100) on six outcome pillars versus the other districts; the index is their simple average. It shows relative standing, not distance from a target.</p><table><tr><th>Pillar</th><th>Indicator</th><th>Better when</th></tr>" +
     PKM.map(function (p) {
       return (
         "<tr><td>" +
@@ -3557,9 +3525,9 @@ function about() {
       );
     }).join("") +
     "</table>" +
-    "<h4>Derived indicators</h4><ul><li><b>Foodgrain productivity</b> = (rice + wheat + maize production) ÷ (their area).</li><li><b>Irrigation coverage</b> = net irrigated area ÷ net sown area.</li><li><b>Yields</b> are shown only where crop area is at least 500 ha.</li><li><b>Fallow, tubewell, horticulture and female-DBT shares</b> are simple ratios of the stated components.</li><li>State figures for ratios are weighted (total numerator ÷ total denominator), not averages of district values.</li></ul>" +
+    "<h4>Derived indicators</h4><ul><li><b>Other modern methods</b> = any modern method − female sterilization − male sterilization.</li><li><b>Home births</b> = 100 − institutional births.</li><li><b>Private facility births</b> = institutional births − institutional births in a public facility.</li><li>District figures are percentage points and are not weighted by district population.</li></ul>" +
     "<h4>Reading the statistics</h4><ul><li><b>Skew</b>: above +0.5 or below −0.5 means a lopsided spread; the mean is pulled toward the long tail.</li><li><b>CV</b> = std dev ÷ mean. <b>Gini</b>: 0 = perfectly even, 1 = one district holds everything.</li><li><b>Correlation (r)</b> shows districts that move together; it does not prove cause. Bold cells use |r| ≥ 0.32 (p &lt; 0.05 for 38 districts).</li><li><b>North / South of the Ganga</b> grouping is by district location (21 north, 17 south).</li></ul>" +
-    '<h4>Data handling and cautions</h4><div class="flag"><ul><li>Net Sown Area (% of Geo Area) was recalculated from area figures because the source column had impossible values (above 100%).</li><li>Zeros in KCC loans, MSME units, GVA, GSDP, fertilizer use and mechanization were treated as <b>missing</b>.</li><li>Indicators identical in every district (for example combine harvesters) are hidden.</li><li>Indicator years differ (2012 to 2024), so cross-indicator comparisons mix periods.</li><li>Check at source: Araria maize yield (about 9.9 MT/ha) and very small GVA/GSDP values in some districts look like possible entry or unit errors.</li></ul></div>' +
+    '<h4>Data handling and cautions</h4><div class="flag"><ul><li>NFHS flags figures based on 25–49 unweighted cases in parentheses; here they are treated as ordinary values.</li><li>Indicators identical in every district are hidden.</li><li>Three indicators (men married before 21, complementary feeding at 6–8 months, non-breastfeeding adequate diet) are missing in several districts.</li><li>District percentages are unweighted, so smaller districts can swing rankings.</li><li>The composite index uses equal-weight percentiles relative to the other 37 districts, not absolute health targets.</li></ul></div>' +
     (inc.length
       ? "<h4>Indicators with incomplete coverage (" +
         inc.length +
@@ -3620,7 +3588,7 @@ $("#tour").onclick = function () {
 map.on("click dragstart", stopTour);
 
 /* ---- go ---- */
-S.ind = "Agri Performance Index (0-100)";
+S.ind = "NFHS Composite Index (0-100)";
 var H0 = location.hash,
   HP = {};
 fillSelect();
