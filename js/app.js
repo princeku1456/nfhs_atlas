@@ -29,13 +29,16 @@ var PIL = {},
     d["Private facility births (%)"] = r2(Math.max(0, inst - pub));
   });
   var PK = [
-      ["Children under 5 years who are stunted (height-for-age)12 (%)", -1],
-      ["Institutional births (%)", 1],
-      ["Children age 12-23 months fully vaccinated based on information from either vaccination card or mother's recall6 (%)", 1],
-      ["Any modern method2 (%)", 1],
-      ["Mothers who had at least 4 antenatal care visits (%)", 1],
-      ["Total unmet need3 (%)", -1],
-    ];
+    ["Children under 5 years who are stunted (height-for-age)12 (%)", -1],
+    ["Institutional births (%)", 1],
+    [
+      "Children age 12-23 months fully vaccinated based on information from either vaccination card or mother's recall6 (%)",
+      1,
+    ],
+    ["Any modern method2 (%)", 1],
+    ["Mothers who had at least 4 antenatal care visits (%)", 1],
+    ["Total unmet need3 (%)", -1],
+  ];
   PK.forEach(function (p, j) {
     var a = N.map(function (n) {
       return data[n][p[0]];
@@ -127,10 +130,7 @@ var CATS = [
     "Nutrition",
     /breastfed|breastfeeding|solid or semi-solid|adequate diet|stunted|wasted|underweight|overweight|Body Mass Index/,
   ],
-  [
-    "Adult Health",
-    /Blood sugar|blood pressure|tobacco|alcohol/,
-  ],
+  ["Adult Health", /Blood sugar|blood pressure|tobacco|alcohol/],
   [
     "Women's Empowerment",
     /bank or savings account that they themselves use|mobile phone that they themselves use|hygienic methods of protection/,
@@ -1721,8 +1721,10 @@ var fmtV = function (v) {
 var RLAB = {
   "NFHS Composite Index (0-100)": "Composite index",
   "Institutional births (%)": "Institutional births",
-  "Children age 12-23 months fully vaccinated based on information from either vaccination card or mother's recall6 (%)": "Full immunization",
-  "Children under 5 years who are stunted (height-for-age)12 (%)": "Child stunting",
+  "Children age 12-23 months fully vaccinated based on information from either vaccination card or mother's recall6 (%)":
+    "Full immunization",
+  "Children under 5 years who are stunted (height-for-age)12 (%)":
+    "Child stunting",
   "Any modern method2 (%)": "Modern contraceptive use",
   "Mothers who had at least 4 antenatal care visits (%)": "4+ ANC visits",
   "Total unmet need3 (%)": "Unmet need",
@@ -1760,7 +1762,9 @@ var RC = [
     "Children under 5 years who are stunted (height-for-age)12 (%)",
     function (n) {
       return [
-        data[n]["Children under 5 years who are stunted (height-for-age)12 (%)"],
+        data[n][
+          "Children under 5 years who are stunted (height-for-age)12 (%)"
+        ],
         1,
       ];
     },
@@ -2625,10 +2629,16 @@ var MK = [
     ["Index", "NFHS Composite Index (0-100)"],
     ["Institutional births", "Institutional births (%)"],
     ["4+ ANC", "Mothers who had at least 4 antenatal care visits (%)"],
-    ["Full immunization", "Children age 12-23 months fully vaccinated based on information from either vaccination card or mother's recall6 (%)"],
+    [
+      "Full immunization",
+      "Children age 12-23 months fully vaccinated based on information from either vaccination card or mother's recall6 (%)",
+    ],
     ["Modern method", "Any modern method2 (%)"],
     ["Unmet need", "Total unmet need3 (%)"],
-    ["Stunting", "Children under 5 years who are stunted (height-for-age)12 (%)"],
+    [
+      "Stunting",
+      "Children under 5 years who are stunted (height-for-age)12 (%)",
+    ],
     ["Women 10+ schooling", "Women with 10 or more years of schooling (%)"],
     ["Women internet", "Women who have ever used the internet (%)"],
     ["Public births", "Institutional births in public facility (%)"],
@@ -2719,11 +2729,26 @@ $("#cx").onclick = function (e) {
 
 /* review additions: scoreboard, priority districts, regional view, what-if */
 var PKM = [
-    ["Child nutrition", "Children under 5 years who are stunted (height-for-age)12 (%)", -1, "%"],
+    [
+      "Child nutrition",
+      "Children under 5 years who are stunted (height-for-age)12 (%)",
+      -1,
+      "%",
+    ],
     ["Delivery care", "Institutional births (%)", 1, "%"],
-    ["Immunization", "Children age 12-23 months fully vaccinated based on information from either vaccination card or mother's recall6 (%)", 1, "%"],
+    [
+      "Immunization",
+      "Children age 12-23 months fully vaccinated based on information from either vaccination card or mother's recall6 (%)",
+      1,
+      "%",
+    ],
     ["Family planning", "Any modern method2 (%)", 1, "%"],
-    ["Antenatal care", "Mothers who had at least 4 antenatal care visits (%)", 1, "%"],
+    [
+      "Antenatal care",
+      "Mothers who had at least 4 antenatal care visits (%)",
+      1,
+      "%",
+    ],
     ["Unmet need", "Total unmet need3 (%)", -1, "%"],
   ],
   NORTH = [
@@ -3106,13 +3131,15 @@ var PRS = [
     "🍼 High child stunting",
     [["Children under 5 years who are stunted (height-for-age)12 (%)", "q4"]],
   ],
-  [
-    "🏥 Low institutional births",
-    [["Institutional births (%)", "q1"]],
-  ],
+  ["🏥 Low institutional births", [["Institutional births (%)", "q1"]]],
   [
     "💉 Low immunization",
-    [["Children age 12-23 months fully vaccinated based on information from either vaccination card or mother's recall6 (%)", "q1"]],
+    [
+      [
+        "Children age 12-23 months fully vaccinated based on information from either vaccination card or mother's recall6 (%)",
+        "q1",
+      ],
+    ],
   ],
   [
     "👰 High child marriage",
@@ -3611,3 +3638,14 @@ try {
       );
   }
 } catch (e) {}
+
+// Example of hooking it into your existing Leaflet/Mapbox click event
+function onDistrictClick(e) {
+  const districtProperties = e.target.feature.properties; // From GeoJSON
+  const districtName = districtProperties.District;
+
+  // Pass the mapped NFHS-6 properties to the exporter
+  document.getElementById("btn-export-report").onclick = () => {
+    window.exportDistrictReport(districtName, districtProperties);
+  };
+}
