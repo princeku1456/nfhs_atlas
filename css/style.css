@@ -2282,3 +2282,102 @@ button.kpi:hover {
     width: 100%;
   }
 }
+
+/* =========================================================
+   Hidden PDF Template Styles (Only active during export)
+   ========================================================= */
+#pdf-report-container {
+  position: absolute;
+  left: -9999px; /* Keep off-screen during generation */
+  top: 0;
+  width: 800px; /* Fixed width for A4 proportion rendering */
+  background: #ffffff;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  color: #333333;
+}
+
+.report-wrapper {
+  padding: 40px;
+}
+
+.report-header {
+  border-bottom: 3px solid #1f4e79; /* Deep Navy */
+  padding-bottom: 15px;
+  margin-bottom: 30px;
+}
+
+.report-header h2 {
+  color: #7f8c8d; /* Slate Grey */
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin: 0 0 5px 0;
+}
+
+.report-header h1 {
+  color: #1f4e79;
+  font-size: 28px;
+  margin: 0 0 10px 0;
+}
+
+.report-header p {
+  color: #2e75b6; /* Steel Blue */
+  font-size: 12px;
+  margin: 0;
+}
+
+.report-section {
+  margin-bottom: 30px;
+}
+
+.report-section h3 {
+  background-color: #f4f6f8;
+  color: #1f4e79;
+  padding: 10px 15px;
+  border-left: 4px solid #2a9d8f; /* Teal highlight */
+  font-size: 16px;
+  margin-bottom: 20px;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+}
+
+.metric-card {
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  padding: 15px;
+  page-break-inside: avoid;
+}
+
+.metric-card h4 {
+  margin: 0 0 10px 0;
+  font-size: 13px;
+  color: #7f8c8d;
+}
+
+.district-val {
+  font-size: 24px;
+  font-weight: bold;
+  color: #1f4e79;
+}
+
+.benchmark-info {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed #e0e0e0;
+  font-size: 11px;
+  display: flex;
+  justify-content: space-between;
+}
+
+.report-footer {
+  margin-top: 40px;
+  padding-top: 15px;
+  border-top: 1px solid #1f4e79;
+  text-align: center;
+  font-size: 10px;
+  color: #7f8c8d;
+}

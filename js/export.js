@@ -598,3 +598,138 @@
 
   window.AtlasExport = { open: open, close: close, render: render, savePNG: savePNG, savePDF: savePDF };
 })();
+
+
+/**
+ * export.js - Automated District Report Card Generator
+ * Uses print-safe color palettes: Deep Navy (#1F4E79), Teal (#2A9D8F), Slate (#7F8C8D)
+ */
+
+const ReportGenerator = {
+    // Standardized Bihar state averages for benchmarking (mocked for example)
+    stateAverages: {
+        femaleLiteracy: 55.0,
+        institutionalBirths: 76.2,
+        womenInSHGs: 32.5,
+        cleanCookingFuel: 37.8
+    },
+
+    /**
+     * Triggers the PDF generation process
+     * @param {Object} districtData - The nested JSON data for the selected district
+     * @param {String} districtName - Name of the district
+     */
+    async generateReportCard(districtName, districtData) {
+        this.showLoadingState(true);
+
+        try {
+            // 1. Create the report container
+            const reportElement = document.createElement('div');
+            reportElement.id = 'pdf-report-container';
+            reportElement.innerHTML = this.buildHTMLTemplate(districtName, districtData);
+            
+            // Append temporarily to DOM (hidden) for html2canvas to read
+            document.body.appendChild(reportElement);
+
+            // 2. Configure PDF export settings
+            const opt = {
+                margin:       0.5,
+                filename:     `NFHS-6_Report_${districtName.replace(/\s+/g, '_')}.pdf`,
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2, useCORS: true, logging: false },
+                jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
+            };
+
+            // 3. Generate and save PDF
+            await html2pdf().set(opt).from(reportElement).save();
+
+        } catch (error) {
+            console.error("Report generation failed:", error);
+            alert("Failed to generate the report. Please try again.");
+        } finally {
+            // 4. Cleanup DOM and UI
+            const tempElement = document.getElementById('pdf-report-container');
+            if (tempElement) tempElement.remove();
+            this.showLoadingState(false);
+        }
+    },
+
+    /**
+     * Builds the structured HTML for the report card
+     */
+    buildHTMLTemplate(districtName, data) {
+        // Evaluate performance vs state average for color coding
+        const getBenchmarkColor = (val, avg) => val >= avg ? '#2A9D8F' : '#e07a5f'; // Teal for good, Rust for lagging
+
+        return `
+            <div class="report-wrapper">
+                <!-- Header -->
+                <div class="report-header">
+                    <h2>Governance & Public Health Report Card</h2>
+                    <h1>${districtName.toUpperCase()} DISTRICT</h1>
+                    <p>Source: NFHS-6 Bihar District-wise Fact Sheet</p>
+                </div>
+
+                <!-- Livelihood & Empowerment Section -->
+                <div class="report-section">
+                    <h3><i class="icon-livelihood"></i> Rural Livelihood & Women's Empowerment</h3>
+                    <div class="metric-grid">
+                        ${this.buildMetricCard("Women in Self-Help Groups (SHGs)", data.womenInSHGs, this.stateAverages.womenInSHGs, "%")}
+                        ${this.buildMetricCard("Female Literacy (15-49 yrs)", data.femaleLiteracy, this.stateAverages.femaleLiteracy, "%")}
+                        ${this.buildMetricCard("Households with Clean Cooking Fuel", data.cleanCookingFuel, this.stateAverages.cleanCookingFuel, "%")}
+                    </div>
+                </div>
+
+                <!-- Public Health Benchmarking Section -->
+                <div class="report-section">
+                    <h3><i class="icon-health"></i> Public Health Benchmarking</h3>
+                    <div class="metric-grid">
+                        ${this.buildMetricCard("Institutional Births", data.institutionalBirths, this.stateAverages.institutionalBirths, "%")}
+                        <!-- Add more of the 93 indicators here dynamically -->
+                    </div>
+                </div>
+
+                <!-- Footer -->
+                <div class="report-footer">
+                    <p>Generated via Bihar NFHS-6 Spatial Atlas | ${new Date().toLocaleDateString()}</p>
+                </div>
+            </div>
+        `;
+    },
+
+    /**
+     * Helper to build individual metric comparison cards
+     */
+    buildMetricCard(label, districtValue, stateAvg, unit) {
+        const variance = (districtValue - stateAvg).toFixed(1);
+        const isPositive = variance >= 0;
+        const varianceColor = isPositive ? '#2A9D8F' : '#e07a5f';
+        const varianceSign = isPositive ? '+' : '';
+
+        return `
+            <div class="metric-card">
+                <h4>${label}</h4>
+                <div class="metric-values">
+                    <span class="district-val">${districtValue}${unit}</span>
+                </div>
+                <div class="benchmark-info">
+                    <span>State Avg: <strong>${stateAvg}${unit}</strong></span>
+                    <span style="color: ${varianceColor}; font-weight: bold;">
+                        (${varianceSign}${variance} vs State)
+                    </span>
+                </div>
+            </div>
+        `;
+    },
+
+    showLoadingState(isLoading) {
+        // Toggle UI button spinner/text (Assuming an export button with ID 'btn-export-report')
+        const btn = document.getElementById('btn-export-report');
+        if (!btn) return;
+        btn.disabled = isLoading;
+        btn.innerText = isLoading ? "Generating PDF..." : "Download District Report";
+    }
+};
+
+// Expose to global scope for UI bindings
+window.exportDistrictReport = (name, data) => ReportGenerator.generateReportCard(name, data);
