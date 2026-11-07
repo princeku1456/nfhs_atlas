@@ -27,7 +27,7 @@
   var MAP = { x: M, y: 160, w: 970, h: 766 };                  // map panel
   var LEG = { x: MAP.x + MAP.w + 20, y: 160, w: PW - M - (MAP.x + MAP.w + 20), h: 766 }; // legend panel
 
-  var opt = { ext: 'state', lab: 0, fmt: 'png' };              // dialog choices
+  var opt = { ext: 'state', lab: 0, fmt: 'png', detail: 'none', note: '' };  // dialog choices
   var canvas = null, token = 0;
 
   /* ------------------------------------------------------------ helpers */
@@ -225,7 +225,47 @@
 
   function hr(c, x, y, w) { c.strokeStyle = LINE; c.lineWidth = 1; c.beginPath(); c.moveTo(x, y); c.lineTo(x + w, y); c.stroke(); }
 
-  function drawLegend(c) {
+  function detailRows(mode) {
+    if (mode === 'sel') {
+      var rows = [];
+      if (S.sel) rows.push(S.sel);
+      (S.cm || []).forEach(function (n) { if (rows.indexOf(n) < 0) rows.push(n); });
+      return rows;
+    }
+    if (mode === 'rank') {
+      var a = names.filter(function (n) { return V(n) !== null; })
+        .sort(function (a, b) { return V(b) - V(a); });
+      return a.slice(0, 5).concat(a.slice(-5));
+    }
+    return [];
+  }
+
+  function drawDetails(c, px, pw, y, opts) {
+    if (!opts.detail || opts.detail === 'none') return y;
+    var rows = detailRows(opts.detail);
+    if (!rows.length) return y;
+    var bottom = LEG.y + LEG.h - 18;
+    if (y + 58 > bottom) return y;
+    y += 18; hr(c, px, y, pw); y += 26;
+    text(c, 'DISTRICT DETAILS', px, y, font(800, 12), MUTED); y += 12;
+    var max = Math.min(12, Math.max(0, Math.floor((bottom - y) / 20)));
+    var shown = rows.slice(0, max);
+    shown.forEach(function (n) {
+      var v = V(n), rk = rankOf(n), val = v === null ? 'n/a' : fmtC(v);
+      var f = fitted(c, n, pw - 150, 600, 12.5, 10);
+      text(c, f.str, px, y, font(600, f.size), INK);
+      text(c, rk ? '#' + rk : '', px + pw - 128, y, font(600, 11), MUTED, 'right');
+      text(c, val, px + pw, y, font(800, 12.5), INK, 'right');
+      y += 20;
+    });
+    if (rows.length > shown.length) {
+      text(c, '+ ' + (rows.length - shown.length) + ' more', px, y, font(600, 11), MUTED);
+      y += 16;
+    }
+    return y;
+  }
+
+  function drawLegend(c, opts) {
     var p = P(S.ind), px = LEG.x + 22, pw = LEG.w - 44, y = LEG.y + 34;
     rrect(c, LEG.x, LEG.y, LEG.w, LEG.h, 18); c.fillStyle = '#fff'; c.fill();
     c.strokeStyle = LINE; c.lineWidth = 1; c.stroke();
@@ -313,6 +353,8 @@
         if (e.sub) wrap(c, e.sub, tw, font(500, 12)).slice(0, 3).forEach(function (l) { y += 16; text(c, l, tx, y, font(500, 12), MUTED); });
       });
     }
+
+    y = drawDetails(c, px, pw, y, opts);
   }
 
   /* ------------------------------------------------- header, map, footer */
@@ -334,7 +376,7 @@
     x += pill(c, catOf(S.ind), x, y, 24, '#e3f1ea', '#165d78', 12.5) + 8;
   }
 
-  function drawFooter(c) {
+  function drawFooter(c, opts) {
     hr(c, M, PH - 56, PW - 2 * M);
     text(c, 'Source: NFHS-6 (MoHFW / IIPS) · DataMeet, Census 2011 (district boundaries)', M, PH - 34, font(600, 12), MUTED);
     var have = (S.vs || []).length, miss = names.length - have;
@@ -342,6 +384,10 @@
                      : 'Data available for all ' + names.length + ' districts.', M, PH - 16, font(500, 11.5), MUTED);
     text(c, 'Bihar NFHS Atlas', PW - M, PH - 34, font(700, 12), GREEN, 'right');
     text(c, 'NFHS-6 district percentages (unweighted)', PW - M, PH - 16, font(500, 11.5), MUTED, 'right');
+    if (opts.note) {
+      var nf = fitted(c, opts.note, PW - 2 * M - 560, 500, 11.5, 9.5);
+      text(c, nf.str, PW / 2, PH - 16, font(500, nf.size), MUTED, 'center');
+    }
   }
 
   function drawMapPanel(c, o) {
@@ -362,7 +408,13 @@
   /* -------------------------------------------------------------- render */
   function render(o) {
     o = o || {};
-    var opts = { ext: o.ext || opt.ext, lab: o.lab === undefined ? opt.lab : o.lab, scale: o.scale || SCALE };
+    var opts = {
+      ext: o.ext || opt.ext,
+      lab: o.lab === undefined ? opt.lab : o.lab,
+      detail: o.detail === undefined ? opt.detail : o.detail,
+      note: o.note === undefined ? opt.note : o.note,
+      scale: o.scale || SCALE
+    };
     var cv = document.createElement('canvas');
     cv.width = PW * opts.scale; cv.height = PH * opts.scale;
     var c = cv.getContext('2d');
@@ -370,8 +422,8 @@
     c.fillStyle = '#fff'; c.fillRect(0, 0, PW, PH);
     drawHeader(c);
     drawMapPanel(c, opts);
-    drawLegend(c);
-    drawFooter(c);
+    drawLegend(c, opts);
+    drawFooter(c, opts);
     return cv;
   }
 
@@ -449,16 +501,24 @@
       '<div class="exx" role="dialog" aria-modal="true" aria-labelledby="ext">' +
       '<button class="cl" id="exc" aria-label="Close">✕</button>' +
       '<h2 id="ext">Export map</h2>' +
-      '<p class="exs">Downloads the map as it is coloured now, with a title, legend, key figures and source line.</p>' +
+      '<p class="exs">Downloads the map as it is coloured now, with a title, legend, key figures and an optional district-details table and note.</p>' +
       '<div class="exp" id="exv"><div class="exld">Preparing preview…</div></div>' +
       '<div class="exo">' +
       seg('Area', 'ext', [['state', 'Whole Bihar'], ['view', 'Current view']]) +
       seg('Labels', 'lab', [['0', 'Names'], ['1', 'Values'], ['2', 'None']]) +
+      seg('District details', 'detail', [['none', 'Off'], ['sel', 'Selected + compared'], ['rank', 'Top & bottom 5']]) +
       seg('Format', 'fmt', [['png', 'PNG image'], ['pdf', 'PDF (A4)']]) +
+      '<div class="exnote"><label>Note</label><input id="exnote" placeholder="Optional note shown in the footer…" autocomplete="off"></div>' +
       '</div>' +
       '<div class="exf"><span id="exi"></span><button class="btn pri" id="exd">Download</button></div>' +
       '<div class="exerr" id="exe" hidden></div></div>';
     dlg.onclick = onClick;
+    var note = $('#exnote'), noteTimer = null;
+    if (note) note.oninput = function () {
+      opt.note = note.value;
+      clearTimeout(noteTimer);
+      noteTimer = setTimeout(refresh, 350);
+    };
   }
 
   function seg(label, key, items) {
@@ -475,6 +535,8 @@
       });
     });
     $('#exd').textContent = 'Download ' + (opt.fmt === 'pdf' ? 'PDF' : 'PNG');
+    var ni = $('#exnote');
+    if (ni && ni.value !== (opt.note || '')) ni.value = opt.note || '';
   }
 
   function fontsReady() {

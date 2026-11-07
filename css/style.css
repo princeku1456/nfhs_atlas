@@ -1935,98 +1935,6 @@ button.kpi:hover {
   border-radius: 10px;
   padding: 8px 12px;
 }
-#brief {
-  display: none;
-}
-@media print {
-  @page {
-    size: A4;
-    margin: 13mm;
-  }
-  html,
-  body {
-    background: #fff !important;
-    height: auto !important;
-  }
-  body > * {
-    display: none !important;
-  }
-  body > #brief {
-    display: block !important;
-    color: #15242e;
-    font:
-      12px/1.5 "Plus Jakarta Sans",
-      system-ui,
-      sans-serif;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-  #brief h1 {
-    font-size: 22px;
-    margin: 0;
-  }
-  #brief .m {
-    color: #5b6e78;
-    font-size: 11px;
-    margin: 2px 0 12px;
-  }
-  #brief h3 {
-    font-size: 11px;
-    letter-spacing: 0.8px;
-    text-transform: uppercase;
-    color: #5b6e78;
-    margin: 14px 0 5px;
-    border-bottom: 1px solid #e2e8ee;
-    padding-bottom: 3px;
-  }
-  #brief table {
-    width: 100%;
-    border-collapse: collapse;
-  }
-  #brief td,
-  #brief th {
-    padding: 4px 6px;
-    border-bottom: 1px solid #eef3f8;
-    text-align: left;
-    font-size: 11.5px;
-  }
-  #brief .sum {
-    background: #0f2638;
-    color: #fff;
-    border-radius: 10px;
-    padding: 10px 14px;
-    margin: 8px 0;
-  }
-  #brief .sum b {
-    font-size: 22px;
-  }
-  #brief .bar {
-    height: 7px;
-    background: #e8eef2;
-    border-radius: 9px;
-    position: relative;
-    width: 160px;
-  }
-  #brief .bar i {
-    display: block;
-    height: 100%;
-    background: #1f7a9c;
-    border-radius: 9px;
-  }
-  #brief .bar u {
-    position: absolute;
-    left: 50%;
-    top: -2px;
-    height: 11px;
-    width: 2px;
-    background: #0f2a43;
-  }
-  #brief .ft {
-    margin-top: 14px;
-    font-size: 10px;
-    color: #6b7c75;
-  }
-}
 /* ===== map export dialog ===== */
 #exp {
   position: fixed;
@@ -2115,6 +2023,19 @@ button.kpi:hover {
 .exo .seg button {
   padding: 6px 12px;
   font-size: 12px;
+}
+.exnote {
+  flex: 1 1 220px;
+  min-width: 200px;
+}
+.exnote input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  font-size: 12px;
+  background: #f2f5f8;
+  color: var(--txt);
 }
 .exf {
   display: flex;

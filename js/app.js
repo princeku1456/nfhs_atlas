@@ -3059,7 +3059,7 @@ function whatif(n) {
         );
       })
       .join("") +
-    ' <span style="font-size:11px">tap to overlay on the radar</span></p><p class="rdn"><button class="lk" data-brief="1">🖨 Print / save district brief</button></p>'
+    ' <span style="font-size:11px">tap to overlay on the radar</span></p>'
   );
 }
 $("#p-district").addEventListener("click", function (e) {
@@ -3067,7 +3067,7 @@ $("#p-district").addEventListener("click", function (e) {
   if (b) addCm(b.dataset.peer);
 });
 
-/* officers' toolkit: screening, brief, about */
+/* officers' toolkit: screening and about */
 var SCR = null,
   RULES = [],
   OPTS = "",
@@ -3280,221 +3280,6 @@ names.forEach(function (k) {
 });
 $("#sres").innerHTML = "";
 
-/* printable brief */
-function brief(n) {
-  var d = new Date().toLocaleDateString("en-IN", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    }),
-    F = function (x, p) {
-      return (Math.abs(x) >= 1000 ? fmtC(x) : fmt(x)) + p[3];
-    },
-    h =
-      "<h1>" +
-      (n ? n + " district brief" : "Bihar state brief") +
-      '</h1><div class="m">Bihar NFHS Atlas · generated ' +
-      d +
-      " · Source: NFHS-6 (MoHFW / IIPS); boundaries: DataMeet (Census 2011)</div>";
-  var kr = RV.map(function (r) {
-    var has = n && r.v[n] !== undefined,
-      v = has ? r.v[n] : r.st,
-      bs = r.inv ? r.so[0] : r.so[r.so.length - 1],
-      rk = has
-        ? r.so.filter(function (x) {
-            return r.inv ? r.v[x] < v : r.v[x] > v;
-          }).length +
-          1 +
-          " / " +
-          r.so.length
-        : "";
-    return (
-      "<tr><td>" +
-      (RLAB[r.k] || P(r.k).base) +
-      "</td><td><b>" +
-      fmtV(v) +
-      "</b> " +
-      P(r.k).unit +
-      "</td><td>" +
-      fmtV(r.st) +
-      "</td><td>" +
-      (n ? rk : bs + " (" + fmtV(r.v[bs]) + ")") +
-      "</td></tr>"
-    );
-  }).join("");
-  var kt =
-    "<h3>Headline indicators</h3><table><tr><th>Indicator</th><th>" +
-    (n ? n : "State") +
-    "</th><th>State</th><th>" +
-    (n ? "Rank (1 = best)" : "Best district") +
-    "</th></tr>" +
-    kr +
-    "</table>";
-  if (n) {
-    var pl = PIL[n],
-      j0 = pl.indexOf(Math.min.apply(null, pl)),
-      j1 = pl.indexOf(Math.max.apply(null, pl)),
-      ix = idx(n),
-      avg = sumA(names.map(idx)) / names.length;
-    h +=
-      '<div class="sum"><b>' +
-      ix +
-      "</b> NFHS Composite Index · rank <b>" +
-      rankOf(n, IXK) +
-      "</b> of " +
-      names.length +
-      " · " +
-      (ix >= avg ? "above" : "below") +
-      " the state average (" +
-      avg.toFixed(1) +
-      ")<br>Strongest pillar: " +
-      PN[j1] +
-      " · Weakest pillar: " +
-      PN[j0] +
-      "</div>";
-    h +=
-      "<h3>Performance pillars (percentile score, 50 = state median)</h3><table>" +
-      PKM.map(function (p, j) {
-        var rv = RV.filter(function (r) {
-            return r.k === p[1];
-          })[0],
-          vs = valsOf(p[1]);
-        return (
-          "<tr><td>" +
-          p[0] +
-          "</td><td>" +
-          F(V(n, p[1]), p) +
-          "</td><td>state " +
-          F(rv ? rv.st : sumA(vs) / vs.length, p) +
-          '</td><td><div class="bar"><i style="width:' +
-          pl[j].toFixed(0) +
-          '%"></i><u></u></div></td><td>' +
-          Math.round(pl[j]) +
-          "</td></tr>"
-        );
-      }).join("") +
-      "</table>" +
-      kt;
-    var zs = ALL.filter(function (k) {
-      return !isAdd(k) && V(n, k) !== null;
-    })
-      .map(function (k) {
-        var a = valsOf(k),
-          m = sumA(a) / a.length,
-          sd = Math.sqrt(
-            sumA(
-              a.map(function (x) {
-                return (x - m) * (x - m);
-              }),
-            ) /
-              (a.length - 1),
-          );
-        return [k, sd ? (V(n, k) - m) / sd : 0, m];
-      })
-      .sort(function (a, b) {
-        return Math.abs(b[1]) - Math.abs(a[1]);
-      })
-      .slice(0, 6);
-    h +=
-      "<h3>Where this district stands out (vs state average)</h3><table>" +
-      zs
-        .map(function (z) {
-          return (
-            "<tr><td>" +
-            z[0] +
-            "</td><td><b>" +
-            fmtV(V(n, z[0])) +
-            "</b></td><td>state " +
-            fmtV(z[2]) +
-            "</td><td>" +
-            (z[1] > 0 ? "▲" : "▼") +
-            " " +
-            Math.abs(z[1]).toFixed(1) +
-            " std dev</td></tr>"
-          );
-        })
-        .join("") +
-      "</table>";
-    var ws = pl
-      .map(function (x, i) {
-        return [x, i];
-      })
-      .sort(function (a, b) {
-        return a[0] - b[0];
-      })
-      .slice(0, 2)
-      .filter(function (a) {
-        return a[0] < 50;
-      });
-    if (ws.length) {
-      var up = ws.reduce(function (a, q) {
-        return a + (50 - q[0]) / 6;
-      }, 0);
-      h +=
-        "<h3>Where to focus</h3><p>Raising <b>" +
-        ws
-          .map(function (q) {
-            return PN[q[1]];
-          })
-          .join(" and ") +
-        "</b> to the state median would add about <b>+" +
-        up.toFixed(1) +
-        "</b> index points (" +
-        ix +
-        " to " +
-        (ix + up).toFixed(1) +
-        ").</p>";
-    }
-  } else {
-    h +=
-      kt +
-      "<h3>Index leaders</h3><table>" +
-      names
-        .slice()
-        .sort(function (a, b) {
-          return idx(b) - idx(a);
-        })
-        .slice(0, 5)
-        .map(function (x) {
-          return "<tr><td>" + x + "</td><td>" + idx(x) + "</td></tr>";
-        })
-        .join("") +
-      "</table><h3>Priority districts (lowest index)</h3><table>" +
-      names
-        .slice()
-        .sort(function (a, b) {
-          return idx(a) - idx(b);
-        })
-        .slice(0, 5)
-        .map(function (x) {
-          var pl = PIL[x],
-            j = pl.indexOf(Math.min.apply(null, pl));
-          return (
-            "<tr><td>" +
-            x +
-            "</td><td>" +
-            idx(x) +
-            "</td><td>weakest: " +
-            PN[j] +
-            "</td></tr>"
-          );
-        })
-        .join("") +
-      "</table>";
-  }
-  h +=
-    '<div class="ft">Index = equal-weight average of six outcome pillar percentiles. District values are NFHS-6 percentages (unweighted), so small-sample districts can swing rankings. Percentile scores are relative to the other 37 districts, not absolute health targets. See About in the Atlas for full methodology and data caveats.</div>';
-  $("#brief").innerHTML = h;
-  setTimeout(function () {
-    try {
-      window.print();
-    } catch (e) {}
-  }, 200);
-}
-$("#brf").onclick = function () {
-  brief(S.sel);
-};
-
 /* about / methodology */
 function about() {
   var inc = ALL.map(function (k) {
@@ -3554,9 +3339,6 @@ $("#abt").onclick = function (e) {
 };
 addEventListener("keydown", function (e) {
   if (e.key === "Escape") aboutOpen(false);
-});
-$("#p-district").addEventListener("click", function (e) {
-  if (e.target.closest("[data-brief]")) brief(S.sel);
 });
 /* guided tour */
 var tr = null;
