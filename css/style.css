@@ -1644,6 +1644,70 @@ button.kpi:hover {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
+.ktp {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--txt);
+}
+.ktp p {
+  margin: 0 0 6px;
+}
+.adv {
+  margin-top: 8px;
+  border-top: 1px dashed #e4ebf1;
+  padding-top: 6px;
+}
+.adv summary {
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--mut);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.sensrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 8px;
+  flex-wrap: wrap;
+}
+.sensrow label {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--mut);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  min-width: 52px;
+}
+.sensrow .chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.dchip {
+  padding: 4px 10px;
+  border-radius: 99px;
+  border: 1px solid #dbe3ea;
+  background: #f2f5f8;
+  color: #5c6f7d;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.dchip.on {
+  background: var(--acc);
+  color: #1d1500;
+  border-color: transparent;
+}
+.sensh {
+  margin: 8px 0;
+}
+#senshl.on {
+  background: #d9480f;
+  border-color: #d9480f;
+  color: #fff;
+}
 .kt {
   background: #f2f5f8;
   border: 1px solid #e4ebf1;
@@ -1866,6 +1930,15 @@ button.kpi:hover {
   border-radius: 12px;
   padding: 10px 11px;
   min-width: 0;
+  cursor: pointer;
+  transition: box-shadow 0.15s ease, background 0.15s ease;
+}
+.rgt:hover {
+  background: #eaf0f6;
+}
+.rgt.on {
+  box-shadow: inset 0 0 0 2px var(--acc);
+  background: #fff6ef;
 }
 .rgt small {
   display: block;
@@ -2006,98 +2079,6 @@ button.kpi:hover {
   border: 1px solid #f3d2a4;
   border-radius: 10px;
   padding: 8px 12px;
-}
-#brief {
-  display: none;
-}
-@media print {
-  @page {
-    size: A4;
-    margin: 13mm;
-  }
-  html,
-  body {
-    background: #fff !important;
-    height: auto !important;
-  }
-  body > * {
-    display: none !important;
-  }
-  body > #brief {
-    display: block !important;
-    color: #15242e;
-    font:
-      12px/1.5 "Plus Jakarta Sans",
-      system-ui,
-      sans-serif;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-  #brief h1 {
-    font-size: 22px;
-    margin: 0;
-  }
-  #brief .m {
-    color: #5b6e78;
-    font-size: 11px;
-    margin: 2px 0 12px;
-  }
-  #brief h3 {
-    font-size: 11px;
-    letter-spacing: 0.8px;
-    text-transform: uppercase;
-    color: #5b6e78;
-    margin: 14px 0 5px;
-    border-bottom: 1px solid #e2e8ee;
-    padding-bottom: 3px;
-  }
-  #brief table {
-    width: 100%;
-    border-collapse: collapse;
-  }
-  #brief td,
-  #brief th {
-    padding: 4px 6px;
-    border-bottom: 1px solid #eef3f8;
-    text-align: left;
-    font-size: 11.5px;
-  }
-  #brief .sum {
-    background: #0f2638;
-    color: #fff;
-    border-radius: 10px;
-    padding: 10px 14px;
-    margin: 8px 0;
-  }
-  #brief .sum b {
-    font-size: 22px;
-  }
-  #brief .bar {
-    height: 7px;
-    background: #e8eef2;
-    border-radius: 9px;
-    position: relative;
-    width: 160px;
-  }
-  #brief .bar i {
-    display: block;
-    height: 100%;
-    background: #1f7a9c;
-    border-radius: 9px;
-  }
-  #brief .bar u {
-    position: absolute;
-    left: 50%;
-    top: -2px;
-    height: 11px;
-    width: 2px;
-    background: #0f2a43;
-  }
-  #brief .ft {
-    margin-top: 14px;
-    font-size: 10px;
-    color: #6b7c75;
-  }
 }
 /* ===== map export dialog ===== */
 #exp {
@@ -2439,6 +2420,40 @@ button.kpi:hover {
   display: grid;
   gap: 11px;
   margin: 6px 0 8px;
+}
+.gdh {
+  margin: 8px 0 6px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--mut);
+}
+.gaps {
+  display: grid;
+  gap: 5px;
+  margin: 0 0 8px;
+}
+.gap {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 9px;
+  background: #f7eef0;
+  border-radius: 8px;
+  font-size: 12px;
+}
+.gap span {
+  color: var(--txt);
+  font-weight: 600;
+}
+.gap b {
+  color: #b03a48;
+}
+.gap i {
+  font-style: normal;
+  color: var(--mut);
+  font-size: 11px;
 }
 .dph {
   display: flex;

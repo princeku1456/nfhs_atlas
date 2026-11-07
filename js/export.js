@@ -492,6 +492,43 @@
     });
   }
 
+  function csvCell(v) {
+    return '"' + String(v).replace(/"/g, '""') + '"';
+  }
+
+  function fullCsv() {
+    var cols =
+      typeof ALL !== 'undefined' && ALL.length
+        ? ALL.slice()
+        : Object.keys(data[names[0]] || {});
+    var rows = [['District'].concat(cols).map(csvCell).join(',')];
+    names.forEach(function (n) {
+      rows.push(
+        [n]
+          .concat(
+            cols.map(function (k) {
+              var v = data[n] && data[n][k];
+              return v === undefined || v === null ? '' : v;
+            }),
+          )
+          .map(csvCell)
+          .join(','),
+      );
+    });
+    return rows.join('\r\n');
+  }
+
+  function saveCSV() {
+    var blob = new Blob(['\ufeff' + fullCsv()], { type: 'text/csv;charset=utf-8;' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'bihar-nfhs6-full-data_' + new Date().toISOString().slice(0, 10) + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+    return Promise.resolve();
+  }
+
   /* -------------------------------------------------------------- dialog */
   var dlg = null;
 
@@ -501,13 +538,13 @@
       '<div class="exx" role="dialog" aria-modal="true" aria-labelledby="ext">' +
       '<button class="cl" id="exc" aria-label="Close">✕</button>' +
       '<h2 id="ext">Export map</h2>' +
-      '<p class="exs">Downloads the map as it is coloured now, with a title, legend, key figures and an optional district-details table and note.</p>' +
+      '<p class="exs">Downloads the map as it is coloured now (PNG/PDF) with title, legend, key figures and an optional district-details table — or the full district dataset as CSV.</p>' +
       '<div class="exp" id="exv"><div class="exld">Preparing preview…</div></div>' +
       '<div class="exo">' +
       seg('Area', 'ext', [['state', 'Whole Bihar'], ['view', 'Current view']]) +
       seg('Labels', 'lab', [['0', 'Names'], ['1', 'Values'], ['2', 'None']]) +
       seg('District details', 'detail', [['none', 'Off'], ['sel', 'Selected + compared'], ['rank', 'Top & bottom 5']]) +
-      seg('Format', 'fmt', [['png', 'PNG image'], ['pdf', 'PDF (A4)']]) +
+      seg('Format', 'fmt', [['png', 'PNG image'], ['pdf', 'PDF (A4)'], ['csv', 'Data (CSV, all districts)']]) +
       '<div class="exnote"><label>Note</label><input id="exnote" placeholder="Optional note shown in the footer…" autocomplete="off"></div>' +
       '</div>' +
       '<div class="exf"><span id="exi"></span><button class="btn pri" id="exd">Download</button></div>' +
@@ -534,7 +571,7 @@
         b.classList.toggle('on', on); b.setAttribute('aria-pressed', on);
       });
     });
-    $('#exd').textContent = 'Download ' + (opt.fmt === 'pdf' ? 'PDF' : 'PNG');
+    $('#exd').textContent = 'Download ' + (opt.fmt === 'pdf' ? 'PDF' : opt.fmt === 'csv' ? 'CSV' : 'PNG');
     var ni = $('#exnote');
     if (ni && ni.value !== (opt.note || '')) ni.value = opt.note || '';
   }
@@ -549,6 +586,19 @@
   function refresh() {
     var t = ++token, box = $('#exv');
     syncUI();
+    if (opt.fmt === 'csv') {
+      box.classList.remove('busy');
+      box.innerHTML =
+        '<div class="exld">Full data export: <b style="color:var(--txt)">' +
+        names.length +
+        ' districts × ' +
+        (typeof ALL !== 'undefined' && ALL.length ? ALL.length : '?') +
+        ' indicators</b> — every NFHS-6 value, derived indicators, the composite index and tiers.</div>';
+      $('#exi').textContent =
+        (typeof ALL !== 'undefined' && ALL.length ? ALL.length : '?') +
+        ' indicators · ' + names.length + ' districts';
+      return;
+    }
     box.classList.add('busy');
     fontsReady().then(function () {
       if (t !== token) return;
@@ -566,15 +616,17 @@
     if (b) {
       var key = b.parentNode.getAttribute('data-o'), v = b.getAttribute('data-v');
       opt[key] = key === 'lab' ? +v : v;
-      if (key !== 'fmt') refresh(); else syncUI();
+      refresh();
       return;
     }
     if (e.target.closest('#exd')) {
       var btn = $('#exd'), err = $('#exe'), old = btn.textContent;
-      if (!canvas) return;
+      if (opt.fmt !== 'csv' && !canvas) return;
       btn.disabled = true; btn.textContent = 'Preparing…'; err.hidden = true;
-      (opt.fmt === 'pdf' ? savePDF(canvas) : savePNG(canvas))
-        .catch(function (x) { err.hidden = false; err.textContent = 'Download failed: ' + x.message; })
+      var p =
+        opt.fmt === 'csv' ? saveCSV() :
+        opt.fmt === 'pdf' ? savePDF(canvas) : savePNG(canvas);
+      p.catch(function (x) { err.hidden = false; err.textContent = 'Download failed: ' + x.message; })
         .then(function () { btn.disabled = false; btn.textContent = old; });
     }
   }

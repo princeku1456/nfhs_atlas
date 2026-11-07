@@ -22,7 +22,7 @@
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css"
     />
-    <link rel="stylesheet" href="css/style.css?v=3" />
+    <link rel="stylesheet" href="css/style.css?v=4" />
   </head>
   <body>
     <svg
@@ -54,19 +54,6 @@
         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
         <polyline points="7 10 12 15 17 10" />
         <line x1="12" y1="15" x2="12" y2="3" />
-      </symbol>
-      <symbol
-        id="i-brief"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      >
-        <polyline points="6 9 6 2 18 2 18 9" />
-        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-        <rect x="6" y="14" width="12" height="8" />
       </symbol>
     </svg>
     <div class="app">
@@ -131,9 +118,6 @@
             title="Download the map as PNG or PDF with title and legend"
             ><svg class="ti" aria-hidden="true"><use href="#i-export"></use></svg>
             Export</button
-          ><button id="brf" title="Print or save a one-page brief"
-            ><svg class="ti" aria-hidden="true"><use href="#i-brief"></use></svg>
-            Brief</button
           ><button id="abtb" title="Methodology and data notes">ⓘ About</button
           ><button id="reset" title="Reset view (Esc)">⟲ Reset</button>
         </div>
@@ -154,14 +138,14 @@
       </main>
 
       <aside class="side">
-        <div class="tabs">
-          <button class="tab on" data-tab="insights">Insights</button>
-          <button class="tab" data-tab="district">District</button>
-          <button class="tab" data-tab="explore">Explore</button
-          ><button class="tab" data-tab="screen">Screen</button
-          ><button class="tab" data-tab="data">Data</button>
+        <div class="tabs" role="tablist" aria-label="Views">
+          <button class="tab on" id="tab-insights" role="tab" aria-selected="true" aria-controls="p-insights" data-tab="insights">Insights</button>
+          <button class="tab" id="tab-district" role="tab" aria-selected="false" aria-controls="p-district" data-tab="district" tabindex="-1">District</button>
+          <button class="tab" id="tab-explore" role="tab" aria-selected="false" aria-controls="p-explore" data-tab="explore" tabindex="-1">Explore</button
+          ><button class="tab" id="tab-screen" role="tab" aria-selected="false" aria-controls="p-screen" data-tab="screen" tabindex="-1">Screen</button
+          ><button class="tab" id="tab-data" role="tab" aria-selected="false" aria-controls="p-data" data-tab="data" tabindex="-1">Data</button>
         </div>
-        <div class="pane" id="p-insights">
+        <div class="pane" id="p-insights" role="tabpanel" aria-labelledby="tab-insights" tabindex="0">
           <div class="card insight">
             <h3>Key takeaways</h3>
             <div id="ins"></div>
@@ -180,7 +164,11 @@
                 "
               ></span>
             </h3>
-            <div class="kts" id="kts"></div>
+            <div id="ktp" class="ktp"></div>
+            <details class="adv">
+              <summary>Advanced statistics</summary>
+              <div class="kts" id="kts"></div>
+            </details>
           </div>
           <div class="card">
             <h3><span>What moves with this</span></h3>
@@ -219,6 +207,17 @@
           </div>
           <div class="card">
             <h3>
+              <span>Sensitivity</span
+              ><span class="sub2">test the index · default = published</span>
+            </h3>
+            <div id="sens"></div>
+            <p class="hint2">
+              Changing scaling or dropping domains shows how the tiers and
+              bottom five shift. It does not change the published index.
+            </p>
+          </div>
+          <div class="card">
+            <h3>
               <span>Emerging burden</span
               ><span class="sub2">shown, not scored</span>
             </h3>
@@ -226,10 +225,10 @@
             <p class="hint2" id="ncdn"></p>
           </div>
           <div class="card">
-            <h3><span>North vs South of the Ganga</span></h3>
+            <h3><span>Regional comparison</span></h3>
             <div class="rgs" id="rgs"></div>
             <div class="ch" style="height: 230px">
-              <canvas id="reg"></canvas>
+              <canvas id="reg" role="img" aria-label="Regional comparison chart"></canvas>
             </div>
             <p class="hint2" id="rgn"></p>
           </div>
@@ -244,10 +243,10 @@
             </h3>
             <div class="duo">
               <div class="ch dnc">
-                <small>Method mix</small><canvas id="cmix"></canvas>
+                <small>Method mix</small><canvas id="cmix" role="img" aria-label="Contraceptive method mix stacked bar"></canvas>
               </div>
               <div class="ch dnc">
-                <small>Place of delivery</small><canvas id="cirr"></canvas>
+                <small>Place of delivery</small><canvas id="cirr" role="img" aria-label="Place of delivery stacked bar"></canvas>
               </div>
             </div>
             <p class="hint2">
@@ -260,7 +259,7 @@
               <span>Distribution &amp; skew</span
               ><span class="sk" id="sk"></span>
             </h3>
-            <div class="ch"><canvas id="hist"></canvas></div>
+            <div class="ch"><canvas id="hist" role="img" aria-label="Distribution histogram"></canvas></div>
             <div class="skn" id="skn"></div>
           </div>
           <div class="card">
@@ -271,7 +270,7 @@
                 ><button data-m="bottom">Bottom 10</button></span
               >
             </h3>
-            <div class="ch tall"><canvas id="top"></canvas></div>
+            <div class="ch tall"><canvas id="top" role="img" aria-label="Top and bottom district ranking"></canvas></div>
             <p class="hint2" id="rnknote" hidden>
               Little variation between districts — ranking is not shown for this
               indicator.
@@ -296,8 +295,8 @@
             </p>
           </div>
         </div>
-        <div class="pane" id="p-district" hidden></div>
-        <div class="pane" id="p-explore" hidden>
+        <div class="pane" id="p-district" role="tabpanel" aria-labelledby="tab-district" tabindex="0" hidden></div>
+        <div class="pane" id="p-explore" role="tabpanel" aria-labelledby="tab-explore" tabindex="0" hidden>
           <div class="card">
             <h3>Relationship explorer</h3>
             <div class="xp" id="xp"></div>
@@ -312,11 +311,11 @@
                 ><select id="xy"></select>
               </div>
             </div>
-            <div class="ch xch"><canvas id="sc"></canvas></div>
+            <div class="ch xch"><canvas id="sc" role="img" aria-label="Scatter plot of two indicators"></canvas></div>
             <div class="xn" id="xn"></div>
           </div>
         </div>
-        <div class="pane" id="p-screen" hidden>
+        <div class="pane" id="p-screen" role="tabpanel" aria-labelledby="tab-screen" tabindex="0" hidden>
           <div class="card">
             <h3>
               <span>Screen districts</span
@@ -331,7 +330,7 @@
             <div id="sres"></div>
           </div>
         </div>
-        <div class="pane" id="p-data" hidden>
+        <div class="pane" id="p-data" role="tabpanel" aria-labelledby="tab-data" tabindex="0" hidden>
           <div class="tb">
             <input
               id="flt"
@@ -355,7 +354,6 @@
 
     <div id="abt"><div class="abx" id="abx"></div></div>
     <div id="exp" hidden></div>
-    <div id="brief"></div>
     <button id="fab" aria-label="Jump between map and details"></button>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -364,8 +362,8 @@
     <script src="data/flags.js?v=1"></script>
     <script src="data/state_benchmarks.js?v=1"></script>
     <script src="data/meta.js?v=1"></script>
-    <script src="data/regions.js?v=1"></script>
-    <script src="js/app.js?v=3"></script>
+    <script src="data/regions.js?v=2"></script>
+    <script src="js/app.js?v=4"></script>
     <script src="js/export.js?v=3"></script>
   </body>
 </html>
