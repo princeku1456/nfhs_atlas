@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Shell(node \"C:\\Users\\princ\\AppData\\Local\\Temp\\commandcode\\C--Users-princ-Downloads-NFHS-analysis\\faea534c-fe58-4f57-8d6a-005d077350a0\\scratchpad\\analyze.mjs\")",
+      "Shell(node --version)",
+      "Shell(npm:*)",
+      "Shell(npx --yes playwright --version 2 >& 1)",
+      "Shell(node -e try{require.resolve('playwright');console.log('playwright: local')}catch(e){console.log('playwright: NOT local')})",
+      "Shell(node -e try{require.resolve('puppeteer');console.log('puppeteer: local')}catch(e){console.log('puppeteer: NOT local')})",
+      "Shell(node \"C:\\Users\\princ\\AppData\\Local\\Temp\\commandcode\\C--Users-princ-Downloads-NFHS-analysis\\faea534c-fe58-4f57-8d6a-005d077350a0\\scratchpad\\gen_flags.mjs\")",
+      "Shell(node --check js/app.js)",
+      "Shell(node --check data/flags.js)",
+      "Shell(node --check data/state_benchmarks.js)",
+      "Shell(node \"C:\\Users\\princ\\AppData\\Local\\Temp\\commandcode\\C--Users-princ-Downloads-NFHS-analysis\\faea534c-fe58-4f57-8d6a-005d077350a0\\scratchpad\\verify_flags.mjs\")",
+      "Shell(node -e \"const fs=require('fs'),vm=require('vm');const s={};vm.createContext(s);vm.runInContext(fs.readFileSync('data/districts.js','utf8'),s);const d=s.data;const names=Object.keys(d[Object.keys(d)[0]]);const bad=names.filter(k=>k.includes('\\\"')||k.includes('<'));console.log('indicators in first district:',names.length);console.log('keys with double-quote or <:',bad.length?bad:'none');\")",
+      "Shell(node \"C:\\Users\\princ\\AppData\\Local\\Temp\\commandcode\\C--Users-princ-Downloads-NFHS-analysis\\faea534c-fe58-4f57-8d6a-005d077350a0\\scratchpad\\check_keys.mjs\")",
+      "Shell(node \"C:\\Users\\princ\\AppData\\Local\\Temp\\commandcode\\C--Users-princ-Downloads-NFHS-analysis\\faea534c-fe58-4f57-8d6a-005d077350a0\\scratchpad\\gen_meta.mjs\")",
+      "Shell(node --check data/meta.js)",
+      "Shell(node \"C:\\Users\\princ\\AppData\\Local\\Temp\\commandcode\\C--Users-princ-Downloads-NFHS-analysis\\faea534c-fe58-4f57-8d6a-005d077350a0\\scratchpad\\gen_compact.mjs\")",
+      "Shell(node \"C:\\Users\\princ\\AppData\\Local\\Temp\\commandcode\\C--Users-princ-Downloads-NFHS-analysis\\faea534c-fe58-4f57-8d6a-005d077350a0\\scratchpad\\verify_phase2.mjs\")",
+      "Shell(node --check data/districts.js)",
+      "Shell(node \"C:\\Users\\princ\\AppData\\Local\\Temp\\commandcode\\C--Users-princ-Downloads-NFHS-analysis\\faea534c-fe58-4f57-8d6a-005d077350a0\\scratchpad\\load_test.mjs\")",
+      "Shell(node -e const fs=require('fs'); for(const f of fs.readdirSync('data').sort()) console.log(f, fs.statSync('data/'+f).size+' bytes');)",
+      "Shell(node --check data/regions.js)",
+      "Shell(node \"C:\\Users\\princ\\AppData\\Local\\Temp\\commandcode\\C--Users-princ-Downloads-NFHS-analysis\\faea534c-fe58-4f57-8d6a-005d077350a0\\scratchpad\\check_ties.mjs\")"
+    ],
+    "deny": [],
+    "defaultMode": "default"
+  }
+}

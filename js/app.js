@@ -1,13 +1,396 @@
-/* ---- v3: NFHS-6 data + derived composite index ---- */
-var PIL = {},
-  PN = [
-    "Child nutrition",
-    "Delivery care",
-    "Immunization",
-    "Family planning",
-    "Antenatal care",
-    "Unmet need",
+/* ---- v4: NFHS-6 data + derived composite index (domain-based) ----
+   Five equal-weight domains; each domain = mean of its indicator percentiles.
+   Family planning is counted once (unmet need only). Modern-method use is shown
+   as context, not scored. See About -> "Why these domains".                      */
+var K_STUNT = "Children under 5 years who are stunted (height-for-age)12 (%)",
+  K_WAST = "Children under 5 years who are wasted (weight-for-height)12 (%)",
+  K_ANC = "Mothers who had at least 4 antenatal care visits (%)",
+  K_INST = "Institutional births (%)",
+  K_VAC =
+    "Children age 12-23 months fully vaccinated based on information from either vaccination card or mother's recall6 (%)",
+  K_UNM = "Total unmet need3 (%)",
+  K_W10 = "Women with 10 or more years of schooling (%)",
+  K_MOD = "Any modern method2 (%)",
+  K_CM = "Women age 20-24 years married before age 18 years (%)";
+/* [indicator key, direction (+1 higher is better, -1 lower is better), short label] */
+var DOM = [
+    {
+      n: "Child nutrition",
+      ind: [
+        [K_STUNT, -1, "Stunted"],
+        [K_WAST, -1, "Wasted"],
+      ],
+    },
+    {
+      n: "Maternal care",
+      ind: [
+        [K_ANC, 1, "4+ ANC visits"],
+        [K_INST, 1, "Institutional births"],
+      ],
+    },
+    { n: "Immunization", ind: [[K_VAC, 1, "Fully vaccinated"]] },
+    { n: "Unmet FP need", ind: [[K_UNM, -1, "Unmet need"]] },
+    { n: "Women's schooling", ind: [[K_W10, 1, "10+ yrs schooling"]] },
+  ],
+  PN = DOM.map(function (d) {
+    return d.n;
+  }),
+  PIL = {},
+  TL = [
+    "Highest tier",
+    "Upper-middle tier",
+    "Middle tier",
+    "Lower-middle tier",
+    "Lowest tier",
+  ],
+  /* ASSUMED effective sample sizes (after design effect) used ONLY to simulate
+     sampling error for tier confidence. NFHS fact sheets do not publish district
+     standard errors. Replace with real values when available. */
+  SE_NEFF = {};
+SE_NEFF[K_STUNT] = 250;
+SE_NEFF[K_WAST] = 250;
+SE_NEFF[K_ANC] = 300;
+SE_NEFF[K_INST] = 300;
+SE_NEFF[K_VAC] = 100;
+SE_NEFF[K_UNM] = 350;
+SE_NEFF[K_W10] = 500;
+SE_NEFF[K_MOD] = 350;
+SE_NEFF[K_CM] = 150;
+
+function okNum(v) {
+  return typeof v === "number" && !isNaN(v);
+}
+function pctArr(a) {
+  var v = a.filter(okNum),
+    m = v.length;
+  return a.map(function (x) {
+    if (!okNum(x)) return null;
+    if (m < 2) return 50;
+    var b = 0,
+      e = 0;
+    v.forEach(function (y) {
+      if (y < x) b++;
+      else if (y === x) e++;
+    });
+    return ((b + (e - 1) / 2) / (m - 1)) * 100;
+  });
+}
+function zArr(a) {
+  var v = a.filter(okNum),
+    m =
+      v.reduce(function (s, x) {
+        return s + x;
+      }, 0) / v.length,
+    sd =
+      Math.sqrt(
+        v.reduce(function (s, x) {
+          return s + (x - m) * (x - m);
+        }, 0) / v.length,
+      ) || 1;
+  return a.map(function (x) {
+    return okNum(x) ? 50 + (20 * (x - m)) / sd : null;
+  });
+}
+function mmArr(a) {
+  var v = a.filter(okNum),
+    lo = Math.min.apply(null, v),
+    hi = Math.max.apply(null, v);
+  return a.map(function (x) {
+    return okNum(x) ? ((x - lo) / (hi - lo || 1)) * 100 : null;
+  });
+}
+var NORM = { pct: pctArr, z: zArr, mm: mmArr };
+function colsFor(N, doms) {
+  var c = {};
+  doms.forEach(function (d) {
+    d.ind.forEach(function (p) {
+      if (!c[p[0]])
+        c[p[0]] = N.map(function (n) {
+          var v = data[n][p[0]];
+          return okNum(v) ? v : null;
+        });
+    });
+  });
+  return c;
+}
+/* cols: {indicatorKey: [value per district]}; returns domain scores + composite per district */
+function scoreSet(cols, doms, method) {
+  var f = NORM[method],
+    nD = cols[doms[0].ind[0][0]].length,
+    dsc = doms.map(function (d) {
+      var parts = d.ind.map(function (p) {
+          var t = f(cols[p[0]]);
+          return p[1] > 0
+            ? t
+            : t.map(function (x) {
+                return x === null ? null : 100 - x;
+              });
+        }),
+        out = [];
+      for (var i = 0; i < nD; i++) {
+        var s = 0,
+          c = 0;
+        for (var j = 0; j < parts.length; j++)
+          if (parts[j][i] !== null) {
+            s += parts[j][i];
+            c++;
+          }
+        out.push(c ? s / c : null);
+      }
+      return out;
+    }),
+    ix = [];
+  for (var i = 0; i < nD; i++) {
+    var s = 0,
+      c = 0;
+    for (var j = 0; j < dsc.length; j++)
+      if (dsc[j][i] !== null) {
+        s += dsc[j][i];
+        c++;
+      }
+    ix.push(c ? s / c : null);
+  }
+  return { dom: dsc, idx: ix };
+}
+function rankArr(a) {
+  return a.map(function (x) {
+    var c = 1;
+    for (var j = 0; j < a.length; j++) if (a[j] > x) c++;
+    return c;
+  });
+}
+function tierOfRank(r, n) {
+  return Math.min(4, Math.floor(((r - 1) * 5) / n));
+}
+function spearman(a, b) {
+  var x = pctArr(a),
+    y = pctArr(b),
+    n = x.length,
+    mx = 0,
+    my = 0,
+    sxy = 0,
+    sxx = 0,
+    syy = 0,
+    i;
+  for (i = 0; i < n; i++) {
+    mx += x[i] / n;
+    my += y[i] / n;
+  }
+  for (i = 0; i < n; i++) {
+    sxy += (x[i] - mx) * (y[i] - my);
+    sxx += (x[i] - mx) * (x[i] - mx);
+    syy += (y[i] - my) * (y[i] - my);
+  }
+  return sxy / Math.sqrt(sxx * syy);
+}
+/* alternative designs used by the stability check */
+function variantList() {
+  var v = [
+    { label: "Default: percentile scores, 5 domains", f: "pct", doms: DOM },
+    { label: "Z-score scaling", f: "z", doms: DOM },
+    { label: "Min–max scaling", f: "mm", doms: DOM },
   ];
+  DOM.forEach(function (d, j) {
+    v.push({
+      label: "Without " + d.n,
+      f: "pct",
+      doms: DOM.filter(function (x, i) {
+        return i !== j;
+      }),
+    });
+  });
+  v.push({
+    label: "Child marriage instead of schooling",
+    f: "pct",
+    doms: DOM.map(function (d, j) {
+      return j === 4
+        ? { n: "Women's status", ind: [[K_CM, -1, "Married <18"]] }
+        : d;
+    }),
+  });
+  v.push({
+    label: "Original v1: six single-indicator pillars",
+    f: "pct",
+    doms: [
+      [K_STUNT, -1],
+      [K_INST, 1],
+      [K_VAC, 1],
+      [K_MOD, 1],
+      [K_ANC, 1],
+      [K_UNM, -1],
+    ].map(function (p) {
+      return { n: "p", ind: [[p[0], p[1], ""]] };
+    }),
+  });
+  return v;
+}
+function stability() {
+  if (stability.c) return stability.c;
+  var N = names,
+    vs = variantList(),
+    all = [];
+  vs.forEach(function (v) {
+    v.doms.forEach(function (d) {
+      all.push(d);
+    });
+  });
+  var cols = colsFor(N, all),
+    cnt = {},
+    base = null,
+    out = [];
+  vs.forEach(function (v, vi) {
+    var r = scoreSet(cols, v.doms, v.f).idx;
+    if (!vi) base = r;
+    var b5 = N.map(function (n, i) {
+      return [n, r[i]];
+    })
+      .sort(function (a, b) {
+        return a[1] - b[1] || a[0].localeCompare(b[0]);
+      })
+      .slice(0, 5)
+      .map(function (x) {
+        return x[0];
+      });
+    b5.forEach(function (x) {
+      cnt[x] = (cnt[x] || 0) + 1;
+    });
+    out.push({ label: v.label, bottom: b5, rho: vi ? spearman(base, r) : 1 });
+  });
+  return (stability.c = { vars: out, cnt: cnt, total: vs.length });
+}
+/* Monte-Carlo: how often does a district stay in its tier if each indicator
+   carries plausible sampling error? Seeded, so results are reproducible. */
+function uncertainty() {
+  if (uncertainty.c) return uncertainty.c;
+  var N = names,
+    nN = N.length,
+    keys = [];
+  DOM.forEach(function (d) {
+    d.ind.forEach(function (p) {
+      keys.push(p[0]);
+    });
+  });
+  var base = colsFor(N, DOM),
+    sd = {};
+  keys.forEach(function (k) {
+    sd[k] = base[k].map(function (v) {
+      if (v === null) return 0;
+      var p = Math.min(0.98, Math.max(0.02, v / 100));
+      return 100 * Math.sqrt((p * (1 - p)) / SE_NEFF[k]);
+    });
+  });
+  var seed = 20260507,
+    rnd = function () {
+      seed = (seed * 1664525 + 1013904223) % 4294967296;
+      return seed / 4294967296;
+    },
+    gauss = function () {
+      var u = rnd() || 1e-9,
+        w = rnd();
+      return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * w);
+    },
+    D = 500,
+    rk = N.map(function () {
+      return [];
+    }),
+    same = N.map(function () {
+      return 0;
+    }),
+    pt = scoreSet(base, DOM, "pct").idx.map(function (x) {
+      return Math.round(x * 100) / 100;
+    }),
+    pTier = rankArr(pt).map(function (r) {
+      return tierOfRank(r, nN);
+    });
+  for (var t = 0; t < D; t++) {
+    var cc = {};
+    keys.forEach(function (k) {
+      cc[k] = base[k].map(function (v, i) {
+        return v === null
+          ? null
+          : Math.min(100, Math.max(0, v + gauss() * sd[k][i]));
+      });
+    });
+    var r = rankArr(scoreSet(cc, DOM, "pct").idx);
+    for (var i = 0; i < nN; i++) {
+      rk[i].push(r[i]);
+      if (tierOfRank(r[i], nN) === pTier[i]) same[i]++;
+    }
+  }
+  var lo = {},
+    hi = {},
+    conf = {};
+  N.forEach(function (n, i) {
+    var a = rk[i].sort(function (x, y) {
+      return x - y;
+    });
+    lo[n] = a[Math.floor(D * 0.05)];
+    hi[n] = a[Math.min(D - 1, Math.floor(D * 0.95))];
+    conf[n] = same[i] / D;
+  });
+  return (uncertainty.c = { lo: lo, hi: hi, conf: conf });
+}
+function tierInfo(n) {
+  var rk = rankOf(n, IXK),
+    t = tierOfRank(rk, names.length),
+    u = uncertainty();
+  return {
+    rk: rk,
+    t: t,
+    label: TL[t],
+    lo: u.lo[n],
+    hi: u.hi[n],
+    conf: u.conf[n],
+    unsure: u.conf[n] < 0.6,
+  };
+}
+function tierChip(n) {
+  var t = tierInfo(n);
+  return (
+    '<span class="tier t' +
+    t.t +
+    '" title="Plausible rank ' +
+    t.lo +
+    "–" +
+    t.hi +
+    " of " +
+    names.length +
+    " (90% of simulations, assumed sampling error). Stays in this tier in " +
+    Math.round(t.conf * 100) +
+    '% of simulations.">' +
+    t.label +
+    (t.unsure ? " ~" : "") +
+    "</span>"
+  );
+}
+function tiedWith(n) {
+  return names.filter(function (m) {
+    return m !== n && Math.abs(idx(m) - idx(n)) < 1;
+  });
+}
+function rkTxt(n) {
+  if (S.ind === IXK && PIL[n]) {
+    var t = tierInfo(n);
+    return (
+      t.label +
+      (t.unsure ? " ~" : "") +
+      " · plausible rank " +
+      t.lo +
+      "–" +
+      t.hi +
+      " of " +
+      names.length
+    );
+  }
+  var tc = tieCount(n);
+  return (
+    "Rank #" +
+    rankOf(n) +
+    " of " +
+    S.vs.length +
+    (tc ? " = tied" : "")
+  );
+}
 (function () {
   var N = Object.keys(data),
     r2 = function (x) {
@@ -28,43 +411,13 @@ var PIL = {},
     d["Home births (%)"] = r2(Math.max(0, 100 - inst));
     d["Private facility births (%)"] = r2(Math.max(0, inst - pub));
   });
-  var PK = [
-    ["Children under 5 years who are stunted (height-for-age)12 (%)", -1],
-    ["Institutional births (%)", 1],
-    [
-      "Children age 12-23 months fully vaccinated based on information from either vaccination card or mother's recall6 (%)",
-      1,
-    ],
-    ["Any modern method2 (%)", 1],
-    ["Mothers who had at least 4 antenatal care visits (%)", 1],
-    ["Total unmet need3 (%)", -1],
-  ];
-  PK.forEach(function (p, j) {
-    var a = N.map(function (n) {
-      return data[n][p[0]];
-    }).filter(ok);
-    N.forEach(function (n) {
-      var v = data[n][p[0]],
-        o = 0;
-      if (ok(v)) {
-        var b = a.filter(function (x) {
-            return x < v;
-          }).length,
-          e = a.filter(function (x) {
-            return x === v;
-          }).length,
-          pc = ((b + (e - 1) / 2) / (a.length - 1)) * 100;
-        o = p[1] > 0 ? pc : 100 - pc;
-      }
-      (PIL[n] = PIL[n] || [])[j] = o;
+  var cols0 = colsFor(N, DOM),
+    res0 = scoreSet(cols0, DOM, "pct");
+  N.forEach(function (n, i) {
+    PIL[n] = res0.dom.map(function (t) {
+      return t[i] === null ? 0 : t[i];
     });
-  });
-  N.forEach(function (n) {
-    data[n]["NFHS Composite Index (0-100)"] = r2(
-      PIL[n].reduce(function (a, b) {
-        return a + b;
-      }, 0) / 6,
-    );
+    data[n]["NFHS Composite Index (0-100)"] = r2(res0.idx[i]);
   });
   Object.keys(data[N[0]]).forEach(function (k) {
     var u = {};
@@ -130,7 +483,10 @@ var CATS = [
     "Nutrition",
     /breastfed|breastfeeding|solid or semi-solid|adequate diet|stunted|wasted|underweight|overweight|Body Mass Index/,
   ],
-  ["Adult Health", /Blood sugar|blood pressure|tobacco|alcohol/],
+  [
+    "Adult Health",
+    /Blood sugar|blood pressure|tobacco|alcohol/,
+  ],
   [
     "Women's Empowerment",
     /bank or savings account that they themselves use|mobile phone that they themselves use|hygienic methods of protection/,
@@ -170,21 +526,40 @@ function P(i) {
     return "";
   });
   var m = /^(.*?)\s*\(([^()]*)\)\s*$/.exec(i);
-  if (!m) return { base: i, unit: sex, year: "" };
-  var p = m[2].split(",").map(function (s) {
-      return s.trim();
-    }),
-    y = "";
-  if (/^\d{4}/.test(p[p.length - 1])) y = p.pop();
-  var unit = p.join(", ");
+  var base, unit, year = "";
+  if (m) {
+    base = m[1];
+    var p = m[2].split(",").map(function (s) {
+        return s.trim();
+      });
+    if (/^\d{4}/.test(p[p.length - 1])) year = p.pop();
+    unit = p.join(", ");
+  } else {
+    base = i;
+    unit = "";
+  }
   if (sex) unit = (unit ? unit + " · " : "") + sex;
-  return { base: m[1], unit: unit, year: y };
+  var footnote = "";
+  base = base
+    .replace(/\s*(\d+(?:\s*,\s*\d+)*)\s*$/, function (x, g) {
+      footnote = g;
+      return "";
+    })
+    .trim();
+  return { base: base, unit: unit, year: year, footnote: footnote };
 }
 function isAdd(i) {
   return !/%|\/ha|\/1k|per |\(mm\)|Density|Intensity|Stage|Index/i.test(i);
 }
+function flagOf(n, i) {
+  var k = i || S.ind;
+  if (typeof FLAGS === "undefined" || !FLAGS[n]) return "ok";
+  return FLAGS[n][k] || "ok";
+}
 function V(n, i) {
-  var v = (data[n] || {})[i || S.ind];
+  var k = i || S.ind;
+  if (flagOf(n, k) === "not_available") return null;
+  var v = (data[n] || {})[k];
   return isNum(v) ? v : null;
 }
 function valsOf(i) {
@@ -196,6 +571,26 @@ function valsOf(i) {
       return v !== null;
     });
 }
+/* Near-constant indicators: coefficient of variation < 0.05 or range < 5 points.
+   Tagged "little variation" and excluded from rankings, the correlation matrix
+   and screening defaults, but still viewable on the map. Thresholds are stated
+   so the definition is reproducible from the data. */
+var NEAR_CONSTANT = {};
+(function () {
+  ALL.forEach(function (k) {
+    var vs = valsOf(k);
+    if (vs.length < 30) return;
+    var mn = Math.min.apply(null, vs),
+      mx = Math.max.apply(null, vs),
+      mean = vs.reduce(function (a, b) { return a + b; }, 0) / vs.length,
+      sd = Math.sqrt(
+        vs.reduce(function (a, b) { return a + (b - mean) * (b - mean); }, 0) /
+          vs.length,
+      ),
+      cv = mean === 0 ? 0 : sd / Math.abs(mean);
+    if (cv < 0.05 || mx - mn < 5) NEAR_CONSTANT[k] = true;
+  });
+})();
 function rankOf(n, i) {
   var v = V(n, i);
   if (v === null) return null;
@@ -203,6 +598,16 @@ function rankOf(n, i) {
     valsOf(i || S.ind).filter(function (x) {
       return x > v;
     }).length + 1
+  );
+}
+/* number of other districts with exactly the same displayed value (tied) */
+function tieCount(n, i) {
+  var v = V(n, i);
+  if (v === null) return 0;
+  return (
+    valsOf(i || S.ind).filter(function (x) {
+      return x === v;
+    }).length - 1
   );
 }
 function mixc(a, b, t) {
@@ -320,10 +725,8 @@ function hc(n) {
     fmt(v) +
     " <small>" +
     P(S.ind).unit +
-    '</small></div><div class="h3">Rank #' +
-    rankOf(n) +
-    " of " +
-    S.vs.length +
+    '</small></div><div class="h3">' +
+    rkTxt(n) +
     (S.mean
       ? " · " + (d >= 0 ? "▲ " : "▼ ") + Math.abs(d).toFixed(0) + "% vs avg"
       : "") +
@@ -487,7 +890,14 @@ function fillSelect() {
     });
   se.innerHTML = o
     .map(function (i) {
-      return "<option>" + i + "</option>";
+      return (
+        '<option value="' +
+        i +
+        '">' +
+        P(i).base +
+        (NEAR_CONSTANT[i] ? " — little variation" : "") +
+        "</option>"
+      );
     })
     .join("");
   if (!t) {
@@ -610,8 +1020,64 @@ function title() {
     (p.year ? '<span class="tag">' + p.year + "</span>" : "") +
     '<span class="tag">' +
     catOf(S.ind) +
-    "</span>";
+    "</span>" +
+    (NEAR_CONSTANT[S.ind]
+      ? '<span class="tag lv" title="Values are nearly the same across districts, so ranking is not shown">little variation</span>'
+      : "");
 }
+function dirTxt(d) {
+  return d === "higher_better"
+    ? "higher is better"
+    : d === "lower_better"
+      ? "lower is better"
+      : d === "context"
+        ? "context only"
+        : "not classified";
+}
+function metaInfo(i) {
+  var m = typeof META !== "undefined" && META[i] ? META[i] : null,
+    p = P(i),
+    r = [];
+  if (p.unit) r.push("<li><b>Unit</b> " + p.unit + "</li>");
+  if (m) {
+    r.push("<li><b>Theme</b> " + m.theme + "</li>");
+    if (m.domain) r.push("<li><b>Index domain</b> " + m.domain + "</li>");
+    r.push(
+      "<li><b>Direction</b> " +
+        (m.direction ? dirTxt(m.direction) : "not classified") +
+        "</li>",
+    );
+    if (m.footnote) r.push("<li><b>Footnote</b> " + m.footnote + "</li>");
+    r.push(
+      "<li><b>Definition</b> " +
+        (m.definition || "<i>definition not yet added</i>") +
+        "</li>",
+    );
+    if (m.denominator) r.push("<li><b>Denominator</b> " + m.denominator + "</li>");
+    if (m.referencePeriod)
+      r.push("<li><b>Reference period</b> " + m.referencePeriod + "</li>");
+    if (m.sourcePage) r.push("<li><b>Source</b> " + m.sourcePage + "</li>");
+  } else {
+    r.push("<li><b>Definition</b> <i>definition not yet added</i></li>");
+  }
+  return "<ul>" + r.join("") + "</ul>";
+}
+$("#mi").onclick = function (e) {
+  e.stopPropagation();
+  var t = $("#mit");
+  if (t.hidden) {
+    t.innerHTML = metaInfo(S.ind);
+    t.hidden = false;
+  } else {
+    t.hidden = true;
+  }
+};
+document.addEventListener("click", function (e) {
+  if (!e.target.closest("#mit") && !e.target.closest("#mi")) {
+    var t = $("#mit");
+    if (t) t.hidden = true;
+  }
+});
 function legend() {
   var h = "",
     cnt = S.cols.map(function () {
@@ -1016,7 +1482,10 @@ var topChart = new Chart($("#top"), {
         {
           callbacks: {
             label: function (i) {
-              return fmt(i.raw);
+              var n = topN[i.dataIndex],
+                r = rankOf(n),
+                t = tieCount(n);
+              return "#" + r + (t ? "=" : "") + " · " + fmt(i.raw);
             },
           },
         },
@@ -1100,6 +1569,18 @@ function charts() {
     borderRadius: 6,
   };
   topChart.update();
+  var nc = NEAR_CONSTANT[S.ind],
+    rn = $("#rnknote"),
+    seg = $("#seg"),
+    topbox = $("#top").closest(".ch");
+  if (rn) rn.hidden = !nc;
+  if (seg) seg.hidden = nc;
+  if (topbox) topbox.hidden = nc;
+  if (nc) {
+    topChart.data.labels = [];
+    topChart.data.datasets[0].data = [];
+    topChart.update();
+  }
 }
 $("#seg").onclick = function (e) {
   var b = e.target.closest("button");
@@ -1161,10 +1642,8 @@ function renderProfile() {
     "</span></div>" +
     (v === null
       ? ""
-      : '<span class="pill">Rank #' +
-        rankOf(n) +
-        " of " +
-        S.vs.length +
+      : '<span class="pill">' +
+        rkTxt(n) +
         '</span><span class="pill">' +
         (d >= 0 ? "▲" : "▼") +
         " " +
@@ -1378,6 +1857,7 @@ function renderList() {
           k: k,
           r: rankOf(n, k),
           t: valsOf(k).length,
+          tc: tieCount(n, k),
           vs: vs,
           rk: g.map(function (d) {
             return rankOf(d, k);
@@ -1427,14 +1907,14 @@ function renderList() {
             '" data-i="' +
             k.replace(/"/g, "&quot;") +
             '" title="' +
-            k.replace(/"/g, "&quot;") +
+            q2.base +
             '"><small>' +
             q2.base +
             "</small>" +
             (cm.length ? "" : "<b>" + fmtC(V(n, k)) + "</b>") +
             (cm.length
               ? ""
-              : "<em>#" + o.r + "<span> /" + o.t + "</span></em>") +
+              : "<em>#" + o.r + (o.tc ? "=" : "") + "<span> /" + o.t + "</span></em>") +
             (cm.length
               ? miniBars(o, g)
               : '<span class="rb"><i style="width:' +
@@ -1545,7 +2025,7 @@ function renderTable() {
       return n.toLowerCase().indexOf(q) >= 0;
     })
     .map(function (n) {
-      return { n: n, v: V(n), r: rankOf(n) };
+      return { n: n, v: V(n), r: rankOf(n), t: tieCount(n) };
     });
   r.sort(function (a, b) {
     return S.sk === "n"
@@ -1561,7 +2041,7 @@ function renderTable() {
         '" class="' +
         (x.n === S.sel ? "sel" : "") +
         '"><td class="rk">' +
-        (x.r || "–") +
+        (x.r ? x.r + (x.t ? "=" : "") : "–") +
         "</td><td>" +
         x.n +
         '</td><td class="vb"><span class="bar" style="width:' +
@@ -1609,7 +2089,7 @@ document.querySelectorAll("th").forEach(function (h) {
 });
 $("#flt").oninput = renderTable;
 $("#csv").onclick = function () {
-  var rows = ['District,"' + S.ind + '"'].concat(
+  var rows = ['District,"' + P(S.ind).base + '"'].concat(
       names.map(function (n) {
         return n + "," + (V(n) === null ? "" : V(n));
       }),
@@ -1721,10 +2201,8 @@ var fmtV = function (v) {
 var RLAB = {
   "NFHS Composite Index (0-100)": "Composite index",
   "Institutional births (%)": "Institutional births",
-  "Children age 12-23 months fully vaccinated based on information from either vaccination card or mother's recall6 (%)":
-    "Full immunization",
-  "Children under 5 years who are stunted (height-for-age)12 (%)":
-    "Child stunting",
+  "Children age 12-23 months fully vaccinated based on information from either vaccination card or mother's recall6 (%)": "Full immunization",
+  "Children under 5 years who are stunted (height-for-age)12 (%)": "Child stunting",
   "Any modern method2 (%)": "Modern contraceptive use",
   "Mothers who had at least 4 antenatal care visits (%)": "4+ ANC visits",
   "Total unmet need3 (%)": "Unmet need",
@@ -1762,9 +2240,7 @@ var RC = [
     "Children under 5 years who are stunted (height-for-age)12 (%)",
     function (n) {
       return [
-        data[n][
-          "Children under 5 years who are stunted (height-for-age)12 (%)"
-        ],
+        data[n]["Children under 5 years who are stunted (height-for-age)12 (%)"],
         1,
       ];
     },
@@ -1824,6 +2300,9 @@ var RV = RC.map(function (c) {
     k: c[1],
     v: v,
     inv: c[3],
+    dir:
+      (typeof META !== "undefined" && META[c[1]] && META[c[1]].direction) ||
+      (c[3] ? "lower_better" : "higher_better"),
     st: sd ? (sn / sd) * m : sn,
     so: so,
   };
@@ -1839,7 +2318,7 @@ function ribBuild() {
       '" data-k="' +
       r.k +
       '" title="Click to map: ' +
-      r.k +
+      P(r.k).base +
       '"><div class="rt"><span>' +
       r.ic +
       " " +
@@ -1888,27 +2367,203 @@ function ribUp() {
       x.classList.toggle("on", x.dataset.d === s);
     });
     if (s && r.v[s] !== undefined) {
-      var d = ((t - r.st) / r.st) * 100,
-        g = r.inv ? d < 0 : d > 0,
-        rk =
-          r.so.filter(function (n) {
-            return r.inv ? r.v[n] < t : r.v[n] > t;
-          }).length + 1;
-      l.className = "rl " + (g ? "up" : "dn");
-      l.textContent =
-        (d >= 0 ? "▲ " : "▼ ") +
-        Math.abs(d).toFixed(0) +
-        "% vs state · #" +
-        rk +
-        "/" +
-        r.so.length;
+      var d = ((t - r.st) / r.st) * 100;
+      if (r.dir === "context") {
+        l.className = "rl";
+        l.textContent = "context · " + fmtV(t) + " (state " + fmtV(r.st) + ")";
+      } else {
+        var g = r.inv ? d < 0 : d > 0,
+          rk =
+            r.so.filter(function (n) {
+              return r.inv ? r.v[n] < t : r.v[n] > t;
+            }).length + 1;
+        l.className = "rl " + (g ? "up" : "dn");
+        l.textContent =
+          (d >= 0 ? "▲ " : "▼ ") +
+          Math.abs(d).toFixed(0) +
+          "% vs state · #" +
+          rk +
+          "/" +
+          r.so.length;
+      }
     } else {
-      var b = r.inv ? r.so[0] : r.so[r.so.length - 1];
-      l.className = "rl";
-      l.textContent = "★ Best: " + b;
+      if (r.dir === "context") {
+        l.className = "rl";
+        l.textContent = "State " + fmtV(r.st);
+      } else {
+        var b = r.inv ? r.so[0] : r.so[r.so.length - 1];
+        l.className = "rl";
+        l.textContent = "★ Best: " + b;
+      }
     }
   });
 }
+
+/* stability of the bottom five across alternative index designs */
+function stabCard() {
+  if (stabCard.d || $("#p-insights").hidden) return;
+  stabCard.d = 1;
+  var st = stability(),
+    ks = Object.keys(st.cnt).sort(function (a, b) {
+      return st.cnt[b] - st.cnt[a] || a.localeCompare(b);
+    }),
+    core = ks.filter(function (k) {
+      return st.cnt[k] / st.total >= 0.8;
+    }),
+    low = st.vars.slice(1).sort(function (a, b) {
+      return a.rho - b.rho;
+    })[0],
+    h = ks
+      .map(function (k) {
+        return (
+          '<button class="stbr" data-d="' +
+          k +
+          '"><span>' +
+          k +
+          '</span><div class="stbb"><i style="width:' +
+          ((st.cnt[k] / st.total) * 100).toFixed(0) +
+          '%"></i></div><em>' +
+          st.cnt[k] +
+          "/" +
+          st.total +
+          "</em></button>"
+        );
+      })
+      .join("");
+  $("#stbs").textContent = "bottom 5 · " + st.total + " designs";
+  h +=
+    '<p class="hint2">' +
+    (core.length
+      ? "<b>" +
+        core.join(", ") +
+        "</b> " +
+        (core.length > 1 ? "stay" : "stays") +
+        " in the bottom five under at least 80% of designs; the rest move in and out depending on which indicators are used."
+      : "No district stays in the bottom five under most designs, so read the list as indicative only.") +
+    " Least agreement with the default: <i>" +
+    low.label +
+    "</i> (rank correlation " +
+    low.rho.toFixed(2) +
+    ").</p>" +
+    '<details class="stbd"><summary>See each design</summary><table><tr><th>Design</th><th>Bottom five</th><th>ρ</th></tr>' +
+    st.vars
+      .map(function (v) {
+        return (
+          "<tr><td>" +
+          v.label +
+          "</td><td>" +
+          v.bottom.join(", ") +
+          "</td><td>" +
+          v.rho.toFixed(2) +
+          "</td></tr>"
+        );
+      })
+      .join("") +
+    "</table></details>";
+  $("#stb").innerHTML = h;
+}
+$("#stb").onclick = function (e) {
+  var b = e.target.closest("[data-d]");
+  if (b) select(b.dataset.d, true);
+};
+
+/* emerging burden: shown, deliberately not scored */
+var NCDM = [
+    ["Women · high blood sugar", /^Blood sugar level-high or very high.*\(Women\)$/],
+    ["Men · high blood sugar", /^Blood sugar level-high or very high.*\(Men\)$/],
+    ["Women · high blood pressure", /^Elevated blood pressure.*Women/],
+    ["Men · high blood pressure", /^Elevated blood pressure.*Men/],
+    ["Women · overweight or obese", /overweight or obese/],
+  ],
+  NCDK = [];
+function rcorr(k1, k2) {
+  var a = [],
+    b = [];
+  names.forEach(function (n) {
+    var x = V(n, k1),
+      y = V(n, k2);
+    if (x !== null && y !== null) {
+      a.push(x);
+      b.push(y);
+    }
+  });
+  var m = a.length,
+    ma = sumA(a) / m,
+    mb = sumA(b) / m,
+    s = 0,
+    sx = 0,
+    sy = 0;
+  for (var i = 0; i < m; i++) {
+    s += (a[i] - ma) * (b[i] - mb);
+    sx += (a[i] - ma) * (a[i] - ma);
+    sy += (b[i] - mb) * (b[i] - mb);
+  }
+  return s / Math.sqrt(sx * sy);
+}
+function ncdCard() {
+  if (ncdCard.d || $("#p-insights").hidden) return;
+  ncdCard.d = 1;
+  var rows = [],
+    r0 = null;
+  NCDM.forEach(function (m, i) {
+    var k = ALL.filter(function (x) {
+      return m[1].test(x);
+    })[0];
+    if (!k) return;
+    NCDK[i] = k;
+    var a = names
+        .filter(function (n) {
+          return V(n, k) !== null;
+        })
+        .sort(function (x, y) {
+          return V(y, k) - V(x, k);
+        }),
+      avg = sumA(a.map(function (n) { return V(n, k); })) / a.length,
+      r = rcorr(k, K_STUNT);
+    if (r0 === null) r0 = r;
+    rows.push(
+      '<div class="nc"><div class="nch"><button class="lk" data-n="' +
+        i +
+        '"><b>' +
+        m[0] +
+        "</b></button><span>" +
+        fmt(avg) +
+        '% district avg</span></div><div class="ncd">Highest: ' +
+        a
+          .slice(0, 3)
+          .map(function (d) {
+            return (
+              '<button class="lk" data-d="' +
+              d +
+              '">' +
+              d +
+              " " +
+              fmt(V(d, k)) +
+              "%</button>"
+            );
+          })
+          .join(" ") +
+        "</div><small>Across districts, versus child stunting: r = " +
+        r.toFixed(2) +
+        "</small></div>",
+    );
+  });
+  $("#ncd").innerHTML = rows.join("");
+  $("#ncdn").textContent =
+    "Shown for planning but not scored. " +
+    (r0 !== null && r0 < -0.2
+      ? "Blood sugar and similar measures tend to be higher where child stunting is lower (r = " +
+        r0.toFixed(2) +
+        "), so counting them as a deficit would reward districts with worse child nutrition. Treat them as a separate, emerging burden. "
+      : "They describe a different kind of burden from the access and nutrition outcomes in the index. ") +
+    "District averages are unweighted.";
+}
+$("#ncd").onclick = function (e) {
+  var b = e.target.closest("button");
+  if (!b) return;
+  if (b.dataset.d) select(b.dataset.d, true);
+  else if (b.dataset.n && NCDK[b.dataset.n]) setInd(NCDK[b.dataset.n]);
+};
 var charts0 = charts;
 charts = function () {
   charts0();
@@ -1919,6 +2574,8 @@ charts = function () {
   matrix();
   board();
   priority();
+  stabCard();
+  ncdCard();
   region();
 };
 var rp0 = renderProfile;
@@ -1947,19 +2604,55 @@ function radar() {
     if (x > pl[mx]) mx = i;
     if (x < pl[mi]) mi = i;
   });
+  var tiI = tierInfo(n),
+    tdw = tiedWith(n);
   h.insertAdjacentHTML(
     "afterend",
-    '<div class="card rd"><h3><span>Performance profile</span><span class="sc">Index <b>' +
-      data[n][K] +
-      "</b> · #" +
-      rankOf(n, K) +
-      "/" +
-      names.length +
-      '</span></h3><div class="ch rdc"><canvas id="rad"></canvas></div><p class="rdn">Strongest: <b>' +
+    '<div class="card rd"><h3><span>Domain profile</span><span class="sc">' +
+      tierChip(n) +
+      '</span></h3><div class="dpf">' +
+      DOM.map(function (d, j) {
+        var s = pl[j];
+        return (
+          '<div class="dp"><div class="dph"><b>' +
+          d.n +
+          "</b><span>" +
+          d.ind
+            .map(function (q) {
+              var v = V(n, q[0]);
+              return q[2] + " " + (v === null ? "n/a" : fmt(v) + "%");
+            })
+            .join(" · ") +
+          '</span></div><div class="dpt ' +
+          (s < 34 ? "lo" : s < 67 ? "md" : "hi") +
+          '"><i style="width:' +
+          s.toFixed(0) +
+          '%"></i><u></u><em>' +
+          Math.round(s) +
+          "</em></div></div>"
+        );
+      }).join("") +
+      '</div><p class="rdn">Strongest: <b>' +
       PN[mx] +
       "</b> · Needs attention: <b>" +
       PN[mi] +
-      "</b><br>Equal-weight percentile of 6 pillars; 50 = state median.</p>" +
+      '</b><br>Each bar is a 0–100 domain score; the tick marks the state median (50). Domains are shown separately because districts are often weak on different things.</p><div class="ch rdc"><canvas id="rad"></canvas></div><p class="rdn"><b>Overall index ' +
+      data[n][K] +
+      "</b> (equal-weight average of the " +
+      PN.length +
+      " domains). Plausible rank " +
+      tiI.lo +
+      "–" +
+      tiI.hi +
+      " of " +
+      names.length +
+      "; stays in this tier in " +
+      Math.round(tiI.conf * 100) +
+      "% of simulations." +
+      (tdw.length
+        ? "<br>Within 1 point of " + tdw.join(", ") + " (effectively tied)."
+        : "") +
+      "</p>" +
       whatif(n) +
       "</div>",
   );
@@ -2048,40 +2741,48 @@ var CA = [
   ];
 function dn(c, id, A) {
   var ns = S.sel ? [S.sel] : names,
-    d = A.map(function (a) {
-      return ns.reduce(function (s, n) {
-        return s + (V(n, a[1]) || 0);
-      }, 0);
+    vals = A.map(function (a) {
+      var s = 0,
+        cnt = 0;
+      ns.forEach(function (n) {
+        var v = V(n, a[1]);
+        if (v !== null) {
+          s += v;
+          cnt++;
+        }
+      });
+      return cnt ? s / cnt : 0;
     }),
-    t =
-      d.reduce(function (a, b) {
-        return a + b;
-      }, 0) || 1;
+    t = vals.reduce(function (a, b) {
+      return a + b;
+    }, 0) || 1,
+    pct = vals.map(function (v) {
+      return (v / t) * 100;
+    }),
+    title = S.sel ? S.sel : "Bihar (average of districts)";
   if (!c) {
     c = new Chart($(id), {
-      type: "doughnut",
+      type: "bar",
       data: {
-        labels: A.map(function (a) {
-          return a[0];
-        }),
-        datasets: [
-          {
-            data: d,
-            backgroundColor: A.map(function (a) {
-              return a[2];
-            }),
-            borderWidth: 2,
+        labels: [title],
+        datasets: A.map(function (a, i) {
+          return {
+            label: a[0],
+            data: [pct[i]],
+            backgroundColor: a[2],
+            borderWidth: 1,
             borderColor: "#fff",
-          },
-        ],
+            stack: "s",
+          };
+        }),
       },
       options: {
+        indexAxis: "y",
         responsive: true,
         maintainAspectRatio: false,
-        cutout: "62%",
         animation: { duration: 700 },
         onClick: function (e, el) {
-          if (el.length) setInd(A[el[0].index][1]);
+          if (el.length) setInd(A[el[0].datasetIndex][1]);
         },
         plugins: {
           legend: {
@@ -2092,32 +2793,50 @@ function dn(c, id, A) {
             {
               callbacks: {
                 label: function (i) {
-                  return (
-                    i.label +
-                    ": " +
-                    fmtC(i.raw) +
-                    " pts (" +
-                    ((i.raw / c._t) * 100).toFixed(0) +
-                    "% of mix)"
-                  );
+                  return [
+                    i.dataset.label + ": " + fmt(c._vals[i.datasetIndex]) + "%",
+                    c._pct[i.datasetIndex].toFixed(0) + "% of mix",
+                  ];
                 },
               },
             },
             tipBox,
           ),
         },
+        scales: {
+          x: {
+            stacked: true,
+            min: 0,
+            max: 100,
+            grid: { color: "#eef3f8" },
+            ticks: { callback: function (v) { return v + "%"; } },
+          },
+          y: { stacked: true, grid: { display: false } },
+        },
       },
     });
   } else {
-    c.data.datasets[0].data = d;
+    c.data.labels = [title];
+    c.data.datasets = A.map(function (a, i) {
+      return {
+        label: a[0],
+        data: [pct[i]],
+        backgroundColor: a[2],
+        borderWidth: 1,
+        borderColor: "#fff",
+        stack: "s",
+      };
+    });
     c.update();
   }
   c._t = t;
+  c._vals = vals;
+  c._pct = pct;
   return c;
 }
 function comp() {
   if ($("#p-insights").hidden) return;
-  $("#cmt").textContent = S.sel || "Bihar";
+  $("#cmt").textContent = S.sel || "Bihar (average of districts)";
   mixC = dn(mixC, "#cmix", CA);
   irrC = dn(irrC, "#cirr", IA);
 }
@@ -2166,7 +2885,7 @@ var PRE = [
         '">' +
         og[g]
           .map(function (k) {
-            return "<option>" + k + "</option>";
+            return '<option value="' + k + '">' + P(k).base + "</option>";
           })
           .join("") +
         "</optgroup>"
@@ -2591,9 +3310,9 @@ function related() {
       '<button class="rx1" data-k="' +
       a[0] +
       '" title="' +
-      a[0] +
+      P(a[0]).base +
       '"><span class="n">' +
-      a[0] +
+      P(a[0]).base +
       '</span><span class="bar"><i style="width:' +
       Math.round(Math.abs(a[1]) * 100) +
       "%;background:" +
@@ -2629,95 +3348,115 @@ var MK = [
     ["Index", "NFHS Composite Index (0-100)"],
     ["Institutional births", "Institutional births (%)"],
     ["4+ ANC", "Mothers who had at least 4 antenatal care visits (%)"],
-    [
-      "Full immunization",
-      "Children age 12-23 months fully vaccinated based on information from either vaccination card or mother's recall6 (%)",
-    ],
+    ["Full immunization", "Children age 12-23 months fully vaccinated based on information from either vaccination card or mother's recall6 (%)"],
     ["Modern method", "Any modern method2 (%)"],
     ["Unmet need", "Total unmet need3 (%)"],
-    [
-      "Stunting",
-      "Children under 5 years who are stunted (height-for-age)12 (%)",
-    ],
+    ["Stunting", "Children under 5 years who are stunted (height-for-age)12 (%)"],
     ["Women 10+ schooling", "Women with 10 or more years of schooling (%)"],
     ["Women internet", "Women who have ever used the internet (%)"],
     ["Public births", "Institutional births in public facility (%)"],
   ].filter(function (a) {
-    return ALL.indexOf(a[1]) >= 0;
+    return ALL.indexOf(a[1]) >= 0 && !NEAR_CONSTANT[a[1]];
   }),
-  CM = null;
+  corrMethod = "spearman",
+  corrCache = {};
+function corrOf(k1, k2, method) {
+  var xs = [],
+    ys = [];
+  names.forEach(function (n) {
+    var x = V(n, k1),
+      y = V(n, k2);
+    if (x !== null && y !== null) {
+      xs.push(x);
+      ys.push(y);
+    }
+  });
+  if (xs.length <= 8) return null;
+  if (method === "pearson") {
+    var p = xs.map(function (x, i) {
+      return { x: x, y: ys[i] };
+    });
+    return pear(p).r;
+  }
+  return spearman(xs, ys);
+}
 function matrix() {
   if ($("#p-insights").hidden) return;
+  var CM = corrCache[corrMethod];
   if (!CM) {
     CM = MK.map(function (a) {
       return MK.map(function (b) {
         if (a === b) return 1;
-        var p = [];
-        names.forEach(function (n) {
-          var x = V(n, a[1]),
-            y = V(n, b[1]);
-          if (x !== null && y !== null) p.push({ x: x, y: y });
-        });
-        return p.length > 8 ? pear(p).r : null;
+        return corrOf(a[1], b[1], corrMethod);
       });
     });
-    $("#cx").innerHTML =
-      "<tr><th></th>" +
-      MK.map(function (b) {
-        return (
-          '<th class="cv" data-k="' + b[1] + '"><span>' + b[0] + "</span></th>"
-        );
-      }).join("") +
-      "</tr>" +
-      MK.map(function (a, i) {
-        return (
-          '<tr><th class="rh" data-k="' +
-          a[1] +
-          '">' +
-          a[0] +
-          "</th>" +
-          MK.map(function (b, j) {
-            var r = CM[i][j];
-            if (r === null) return "<td>-</td>";
-            var m = Math.abs(r),
-              bg =
-                i === j
-                  ? "#e8eef2"
-                  : (r > 0 ? "rgba(31,122,156," : "rgba(217,72,15,") +
-                    (0.1 + 0.82 * m) +
-                    ")";
-            return (
-              '<td data-i="' +
-              i +
-              '" data-j="' +
-              j +
-              '" class="' +
-              (m < 0.32 && i !== j ? "ns" : "") +
-              '" style="background:' +
-              bg +
-              ";color:" +
-              (m > 0.55 && i !== j ? "#fff" : "#15242e") +
-              '" title="' +
-              a[0] +
-              " vs " +
-              b[0] +
-              ": r = " +
-              r.toFixed(2) +
-              '">' +
-              (i === j
-                ? "•"
-                : r.toFixed(2).replace("0.", ".").replace("-0.", "-.")) +
-              "</td>"
-            );
-          }).join("") +
-          "</tr>"
-        );
-      }).join("");
+    corrCache[corrMethod] = CM;
   }
+  $("#cx").innerHTML =
+    "<tr><th></th>" +
+    MK.map(function (b) {
+      return (
+        '<th class="cv" data-k="' + b[1] + '"><span>' + b[0] + "</span></th>"
+      );
+    }).join("") +
+    "</tr>" +
+    MK.map(function (a, i) {
+      return (
+        '<tr><th class="rh" data-k="' +
+        a[1] +
+        '">' +
+        a[0] +
+        "</th>" +
+        MK.map(function (b, j) {
+          var r = CM[i][j];
+          if (r === null) return "<td>-</td>";
+          var m = Math.abs(r),
+            bg =
+              i === j
+                ? "#e8eef2"
+                : (r > 0 ? "rgba(31,122,156," : "rgba(217,72,15,") +
+                  (0.1 + 0.82 * m) +
+                  ")";
+          return (
+            '<td data-i="' +
+            i +
+            '" data-j="' +
+            j +
+            '" class="' +
+            (m < 0.32 && i !== j ? "ns" : "") +
+            '" style="background:' +
+            bg +
+            ";color:" +
+            (m > 0.55 && i !== j ? "#fff" : "#15242e") +
+            '" title="' +
+            a[0] +
+            " vs " +
+            b[0] +
+            ": r = " +
+            r.toFixed(2) +
+            '">' +
+            (i === j
+              ? "•"
+              : r.toFixed(2).replace("0.", ".").replace("-0.", "-.")) +
+            "</td>"
+          );
+        }).join("") +
+        "</tr>"
+      );
+    }).join("");
   document.querySelectorAll("#cx th[data-k]").forEach(function (t) {
     t.classList.toggle("cur", t.dataset.k === S.ind);
   });
 }
+$("#cmode").onclick = function (e) {
+  var b = e.target.closest("button");
+  if (!b) return;
+  corrMethod = b.dataset.m;
+  this.querySelectorAll("button").forEach(function (x) {
+    x.classList.toggle("on", x === b);
+  });
+  matrix();
+};
 $("#cx").onclick = function (e) {
   var c = e.target.closest("td[data-i]");
   if (!c || c.dataset.i === c.dataset.j) return;
@@ -2729,27 +3468,13 @@ $("#cx").onclick = function (e) {
 
 /* review additions: scoreboard, priority districts, regional view, what-if */
 var PKM = [
-    [
-      "Child nutrition",
-      "Children under 5 years who are stunted (height-for-age)12 (%)",
-      -1,
-      "%",
-    ],
-    ["Delivery care", "Institutional births (%)", 1, "%"],
-    [
-      "Immunization",
-      "Children age 12-23 months fully vaccinated based on information from either vaccination card or mother's recall6 (%)",
-      1,
-      "%",
-    ],
-    ["Family planning", "Any modern method2 (%)", 1, "%"],
-    [
-      "Antenatal care",
-      "Mothers who had at least 4 antenatal care visits (%)",
-      1,
-      "%",
-    ],
-    ["Unmet need", "Total unmet need3 (%)", -1, "%"],
+    ["Child stunting", K_STUNT, -1, "%", 0],
+    ["Child wasting", K_WAST, -1, "%", 0],
+    ["4+ ANC visits", K_ANC, 1, "%", 1],
+    ["Institutional births", K_INST, 1, "%", 1],
+    ["Full immunization", K_VAC, 1, "%", 2],
+    ["Unmet need for family planning", K_UNM, -1, "%", 3],
+    ["Women with 10+ yrs schooling", K_W10, 1, "%", 4],
   ],
   NORTH = [
     "Araria",
@@ -2826,7 +3551,9 @@ function board() {
       return (
         '<div class="psr"><div class="psh"><b>' +
         r.p[0] +
-        "</b><span>State " +
+        ' <small class="dmt">' +
+        PN[r.p[4]] +
+        "</small></b><span>State " +
         F(r.st, r.p) +
         " · " +
         r.h.toFixed(0) +
@@ -2856,6 +3583,7 @@ $("#psb").onclick = function (e) {
 function priority() {
   if (priority.d || $("#p-insights").hidden) return;
   priority.d = 1;
+  var st = stability();
   $("#pri").innerHTML = names
     .slice()
     .sort(function (a, b) {
@@ -2864,7 +3592,8 @@ function priority() {
     .slice(0, 5)
     .map(function (n) {
       var pl = PIL[n],
-        j = pl.indexOf(Math.min.apply(null, pl));
+        j = pl.indexOf(Math.min.apply(null, pl)),
+        tw = tiedWith(n);
       return (
         '<button class="wl" data-d="' +
         n +
@@ -2872,12 +3601,22 @@ function priority() {
         n +
         "</b><em>Index " +
         idx(n) +
-        '</em></span><span class="b">Weakest pillar: <b>' +
+        '</em></span><span class="b">' +
+        tierChip(n) +
+        ' <span class="stn">bottom 5 in ' +
+        (st.cnt[n] || 0) +
+        "/" +
+        st.total +
+        " methods</span>" +
+        (tw.length
+          ? '<br><span class="stn">≈ tied with ' + tw.join(", ") + "</span>"
+          : "") +
+        "<br>Weakest domain: <b>" +
         PN[j] +
         "</b> (score " +
         Math.round(pl[j]) +
         "). Lifting it to the state median adds about <b>+" +
-        ((50 - pl[j]) / 6).toFixed(1) +
+        ((50 - pl[j]) / PN.length).toFixed(1) +
         "</b> index points.</span></button>"
       );
     })
@@ -2890,6 +3629,16 @@ $("#pri").onclick = function (e) {
 var rgC = null;
 function region() {
   if ($("#p-insights").hidden) return;
+  if (
+    typeof REGIONS_ENABLED !== "undefined" &&
+    REGIONS_ENABLED &&
+    typeof REGIONS !== "undefined" &&
+    REGIONS.some(function (r) {
+      return r.districts.length;
+    })
+  ) {
+    return regionGrouped();
+  }
   var R = [
       [
         "North of Ganga",
@@ -2927,7 +3676,9 @@ function region() {
             return x + PIL[n][i] / r[1].length;
           });
         },
-        [0, 0, 0, 0, 0, 0],
+        PN.map(function () {
+          return 0;
+        }),
       ),
     );
     return (
@@ -3013,6 +3764,99 @@ function region() {
     });
   }
 }
+/* Regional grouped bars — enabled only when REGIONS_ENABLED and REGIONS have
+   district assignments. Shows mean, n and range per region for the selected
+   indicator. */
+var rgC2 = null;
+function regionGrouped() {
+  var rows = [];
+  REGIONS.forEach(function (r) {
+    var vs = r.districts
+      .map(function (n) {
+        return V(n);
+      })
+      .filter(function (x) {
+        return x !== null;
+      }),
+      mean = vs.length ? sumA(vs) / vs.length : null,
+      mn = vs.length ? Math.min.apply(null, vs) : null,
+      mx = vs.length ? Math.max.apply(null, vs) : null;
+    rows.push({ name: r.name, color: r.color, n: vs.length, mean: mean, mn: mn, mx: mx });
+  });
+  $("#rgs").innerHTML = rows
+    .map(function (r) {
+      return (
+        '<div class="rgt" style="border-top:3px solid ' +
+        r.color +
+        '"><small>' +
+        r.name +
+        " · " +
+        r.n +
+        " districts</small><b>" +
+        (r.mean === null ? "-" : fmtV(r.mean)) +
+        "</b><i>" +
+        (r.mean === null ? "no data" : "range " + fmtV(r.mn) + " – " + fmtV(r.mx)) +
+        "</i></div>"
+      );
+    })
+    .join("");
+  $("#rgn").textContent =
+    "Grouped by region for " +
+    P(S.ind).base +
+    ". Bars show each region's mean; the lowest–highest district range is shown above.";
+  var labels = rows.map(function (r) {
+      return r.name;
+    }),
+    means = rows.map(function (r) {
+      return r.mean;
+    }),
+    colors = rows.map(function (r) {
+      return r.color;
+    });
+  if (!rgC2) {
+    rgC2 = new Chart($("#reg"), {
+      type: "bar",
+      data: {
+        labels: labels,
+        datasets: [
+          { data: means, backgroundColor: colors, borderWidth: 1, borderRadius: 5 },
+        ],
+      },
+      options: {
+        indexAxis: "y",
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 700 },
+        plugins: {
+          legend: { display: false },
+          tooltip: Object.assign(
+            {
+              callbacks: {
+                label: function (i) {
+                  return fmt(i.raw);
+                },
+              },
+            },
+            tipBox,
+          ),
+        },
+        scales: {
+          x: {
+            beginAtZero: true,
+            grid: { color: "#eef3f8" },
+            ticks: { callback: function (v) { return fmtC(v); } },
+          },
+          y: { grid: { display: false } },
+        },
+      },
+    });
+  } else {
+    rgC2.data.labels = labels;
+    rgC2.data.datasets[0].data = means;
+    rgC2.data.datasets[0].backgroundColor = colors;
+    rgC2.update();
+  }
+}
 function whatif(n) {
   var pl = PIL[n],
     ws = pl
@@ -3030,7 +3874,7 @@ function whatif(n) {
     h = "";
   if (ws.length) {
     var up = ws.reduce(function (a, q) {
-        return a + (50 - q[0]) / 6;
+        return a + (50 - q[0]) / PN.length;
       }, 0),
       nw = ix + up,
       rk =
@@ -3050,10 +3894,10 @@ function whatif(n) {
       ix +
       " → " +
       nw.toFixed(1) +
-      ", rank #" +
-      rankOf(n, IXK) +
-      " → #" +
-      rk +
+      ", " +
+      tierInfo(n).label.toLowerCase() +
+      " → " +
+      TL[tierOfRank(rk, names.length)].toLowerCase() +
       ").</p>";
   }
   var pe = names
@@ -3084,7 +3928,7 @@ function whatif(n) {
         );
       })
       .join("") +
-    ' <span style="font-size:11px">tap to overlay on the radar</span></p>'
+    ' <span style="font-size:11px">tap to overlay on the radar</span></p><p class="rdn"><button class="lk" data-brief="1">🖨 Print / save district brief</button></p>'
   );
 }
 $("#p-district").addEventListener("click", function (e) {
@@ -3092,7 +3936,7 @@ $("#p-district").addEventListener("click", function (e) {
   if (b) addCm(b.dataset.peer);
 });
 
-/* officers' toolkit: screening and about */
+/* officers' toolkit: screening, brief, about */
 var SCR = null,
   RULES = [],
   OPTS = "",
@@ -3117,7 +3961,7 @@ var SCR = null,
         '">' +
         og[g]
           .map(function (k) {
-            return "<option>" + k + "</option>";
+            return '<option value="' + k + '">' + P(k).base + "</option>";
           })
           .join("") +
         "</optgroup>"
@@ -3131,15 +3975,13 @@ var PRS = [
     "🍼 High child stunting",
     [["Children under 5 years who are stunted (height-for-age)12 (%)", "q4"]],
   ],
-  ["🏥 Low institutional births", [["Institutional births (%)", "q1"]]],
+  [
+    "🏥 Low institutional births",
+    [["Institutional births (%)", "q1"]],
+  ],
   [
     "💉 Low immunization",
-    [
-      [
-        "Children age 12-23 months fully vaccinated based on information from either vaccination card or mother's recall6 (%)",
-        "q1",
-      ],
-    ],
+    [["Children age 12-23 months fully vaccinated based on information from either vaccination card or mother's recall6 (%)", "q1"]],
   ],
   [
     "👰 High child marriage",
@@ -3307,8 +4149,235 @@ names.forEach(function (k) {
 });
 $("#sres").innerHTML = "";
 
+/* printable brief */
+function brief(n) {
+  var d = new Date().toLocaleDateString("en-IN", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    }),
+    F = function (x, p) {
+      return (Math.abs(x) >= 1000 ? fmtC(x) : fmt(x)) + p[3];
+    },
+    h =
+      "<h1>" +
+      (n ? n + " district brief" : "Bihar state brief") +
+      '</h1><div class="m">Bihar NFHS Atlas · generated ' +
+      d +
+      " · Source: NFHS-6 (MoHFW / IIPS); boundaries: DataMeet (Census 2011)</div>";
+  var kr = RV.map(function (r) {
+    var has = n && r.v[n] !== undefined,
+      v = has ? r.v[n] : r.st,
+      bs = r.inv ? r.so[0] : r.so[r.so.length - 1],
+      rk = has
+        ? r.so.filter(function (x) {
+            return r.inv ? r.v[x] < v : r.v[x] > v;
+          }).length +
+          1 +
+          " / " +
+          r.so.length
+        : "";
+    return (
+      "<tr><td>" +
+      (RLAB[r.k] || P(r.k).base) +
+      "</td><td><b>" +
+      fmtV(v) +
+      "</b> " +
+      P(r.k).unit +
+      "</td><td>" +
+      fmtV(r.st) +
+      "</td><td>" +
+      (n ? (r.k === IXK ? tierInfo(n).label : rk) : bs + " (" + fmtV(r.v[bs]) + ")") +
+      "</td></tr>"
+    );
+  }).join("");
+  var kt =
+    "<h3>Headline indicators</h3><table><tr><th>Indicator</th><th>" +
+    (n ? n : "State") +
+    "</th><th>State</th><th>" +
+    (n ? "Rank (1 = best)" : "Best district") +
+    "</th></tr>" +
+    kr +
+    "</table>";
+  if (n) {
+    var pl = PIL[n],
+      j0 = pl.indexOf(Math.min.apply(null, pl)),
+      j1 = pl.indexOf(Math.max.apply(null, pl)),
+      ix = idx(n),
+      avg = sumA(names.map(idx)) / names.length;
+    h +=
+      '<div class="sum"><b>' +
+      ix +
+      "</b> NFHS Composite Index · <b>" +
+      tierInfo(n).label +
+      (tierInfo(n).unsure ? " ~" : "") +
+      "</b> (plausible rank " +
+      tierInfo(n).lo +
+      "–" +
+      tierInfo(n).hi +
+      " of " +
+      names.length +
+      ") · " +
+      (ix >= avg ? "above" : "below") +
+      " the state average (" +
+      avg.toFixed(1) +
+      ")<br>Strongest domain: " +
+      PN[j1] +
+      " · Weakest domain: " +
+      PN[j0] +
+      "</div>";
+    h +=
+      "<h3>Domain scores (0–100, 50 = state median)</h3><table>" +
+      DOM.map(function (d, j) {
+        return (
+          "<tr><td>" +
+          d.n +
+          "</td><td>" +
+          d.ind
+            .map(function (q) {
+              var v = V(n, q[0]);
+              return q[2] + " " + (v === null ? "n/a" : fmt(v) + "%");
+            })
+            .join(" · ") +
+          '</td><td><div class="bar"><i style="width:' +
+          pl[j].toFixed(0) +
+          '%"></i><u></u></div></td><td>' +
+          Math.round(pl[j]) +
+          "</td></tr>"
+        );
+      }).join("") +
+      "</table>" +
+      kt;
+    var zs = ALL.filter(function (k) {
+      return !isAdd(k) && V(n, k) !== null;
+    })
+      .map(function (k) {
+        var a = valsOf(k),
+          m = sumA(a) / a.length,
+          sd = Math.sqrt(
+            sumA(
+              a.map(function (x) {
+                return (x - m) * (x - m);
+              }),
+            ) /
+              (a.length - 1),
+          );
+        return [k, sd ? (V(n, k) - m) / sd : 0, m];
+      })
+      .sort(function (a, b) {
+        return Math.abs(b[1]) - Math.abs(a[1]);
+      })
+      .slice(0, 6);
+    h +=
+      "<h3>Where this district stands out (vs state average)</h3><table>" +
+      zs
+        .map(function (z) {
+          return (
+            "<tr><td>" +
+            P(z[0]).base +
+            "</td><td><b>" +
+            fmtV(V(n, z[0])) +
+            "</b></td><td>state " +
+            fmtV(z[2]) +
+            "</td><td>" +
+            (z[1] > 0 ? "▲" : "▼") +
+            " " +
+            Math.abs(z[1]).toFixed(1) +
+            " std dev</td></tr>"
+          );
+        })
+        .join("") +
+      "</table>";
+    var ws = pl
+      .map(function (x, i) {
+        return [x, i];
+      })
+      .sort(function (a, b) {
+        return a[0] - b[0];
+      })
+      .slice(0, 2)
+      .filter(function (a) {
+        return a[0] < 50;
+      });
+    if (ws.length) {
+      var up = ws.reduce(function (a, q) {
+        return a + (50 - q[0]) / PN.length;
+      }, 0);
+      h +=
+        "<h3>Where to focus</h3><p>Raising <b>" +
+        ws
+          .map(function (q) {
+            return PN[q[1]];
+          })
+          .join(" and ") +
+        "</b> to the state median would add about <b>+" +
+        up.toFixed(1) +
+        "</b> index points (" +
+        ix +
+        " to " +
+        (ix + up).toFixed(1) +
+        ").</p>";
+    }
+  } else {
+    h +=
+      kt +
+      "<h3>Index leaders</h3><table>" +
+      names
+        .slice()
+        .sort(function (a, b) {
+          return idx(b) - idx(a);
+        })
+        .slice(0, 5)
+        .map(function (x) {
+          return "<tr><td>" + x + "</td><td>" + idx(x) + "</td></tr>";
+        })
+        .join("") +
+      "</table><h3>Priority districts (lowest index)</h3><table>" +
+      names
+        .slice()
+        .sort(function (a, b) {
+          return idx(a) - idx(b);
+        })
+        .slice(0, 5)
+        .map(function (x) {
+          var pl = PIL[x],
+            j = pl.indexOf(Math.min.apply(null, pl));
+          return (
+            "<tr><td>" +
+            x +
+            "</td><td>" +
+            idx(x) +
+            "</td><td>weakest: " +
+            PN[j] +
+            "</td></tr>"
+          );
+        })
+        .join("") +
+      "</table>";
+  }
+  h +=
+    '<div class="ft">Index = equal-weight average of five domain scores (child nutrition, maternal care, immunization, unmet family planning need, women’s schooling), each built from district percentiles. Tiers are quintiles of the 38 districts; a tilde (~) marks a tier that is not stable under simulated sampling error (assumed, not published). District values are NFHS-6 percentages (unweighted), so small-sample districts can swing rankings. Scores are relative to the other 37 districts, not absolute health targets. See About in the Atlas for full methodology and data caveats.</div>';
+  $("#brief").innerHTML = h;
+  setTimeout(function () {
+    try {
+      window.print();
+    } catch (e) {}
+  }, 200);
+}
+$("#brf").onclick = function () {
+  brief(S.sel);
+};
+
 /* about / methodology */
 function about() {
+  var fsh = Math.round(
+    (names.reduce(function (a, n) {
+      var m = V(n, K_MOD);
+      return a + (m ? V(n, "Female sterilization (%)") / m : 0);
+    }, 0) /
+      names.length) *
+      100,
+  );
   var inc = ALL.map(function (k) {
     return [k, valsOf(k).length];
   })
@@ -3319,27 +4388,36 @@ function about() {
       return a[1] - b[1];
     });
   $("#abx").innerHTML =
-    '<button class="cl" id="abc" aria-label="Close">✕</button><h2>About this atlas</h2><p>District-level NFHS-6 indicators for Bihar (' +
+    '<button class="cl" id="abc" aria-label="Close">✕</button><h2>About this atlas</h2><p><button class="btn" id="gtour">▶ Start guided tour</button></p><p>District-level NFHS-6 indicators for Bihar (' +
     names.length +
     " districts, " +
     ALL.length +
     " indicators), built for health review and planning. Source: NFHS-6 (MoHFW / IIPS); boundaries: DataMeet (Census 2011).</p>" +
-    "<h4>NFHS Composite Index (0–100)</h4><p>Each district gets a percentile score (0–100) on six outcome pillars versus the other districts; the index is their simple average. It shows relative standing, not distance from a target.</p><table><tr><th>Pillar</th><th>Indicator</th><th>Better when</th></tr>" +
-    PKM.map(function (p) {
-      return (
-        "<tr><td>" +
-        p[0] +
-        "</td><td>" +
-        p[1] +
-        "</td><td>" +
-        (p[2] > 0 ? "higher" : "lower") +
-        "</td></tr>"
-      );
+    "<h4>NFHS Composite Index (0–100)</h4><p>Five domains, equal weight. Inside a domain, each indicator becomes a percentile among the 38 districts (reversed where lower is better) and the indicators are averaged; the index is the average of the five domain scores. It shows <b>relative standing</b>, not distance from a target. 50 is roughly the state median.</p><table><tr><th>Domain</th><th>Indicator</th><th>Better when</th></tr>" +
+    DOM.map(function (d) {
+      return d.ind
+        .map(function (q, i) {
+          return (
+            "<tr><td>" +
+            (i ? "" : d.n) +
+            "</td><td>" +
+            q[2] +
+            "</td><td>" +
+            (q[1] > 0 ? "higher" : "lower") +
+            "</td></tr>"
+          );
+        })
+        .join("");
     }).join("") +
     "</table>" +
+    "<h4>Why these domains</h4><ul><li><b>Family planning counts once.</b> Only unmet need is scored. Modern-method use is not: across districts about " +
+    fsh +
+    "% of it is female sterilization, which says little about choice or spacing. The method mix is shown in the donut chart instead.</li><li><b>Not scored:</b> blood sugar, blood pressure and overweight (higher where child undernutrition is lower, so scoring them as deficits would mislead; see Emerging burden), child marriage (strongly tied to women's schooling, so it would double count; tested in the stability check), and indicators that barely vary between districts (electricity, bank accounts, improved water).</li></ul>" +
+    "<h4>Tiers, ties and uncertainty</h4><p>Districts are grouped into five tiers (quintiles of the 38 districts, Highest to Lowest). Index differences of 1 point or less are treated as ties. A tilde (~) means the district stays in its tier in fewer than 60% of simulations. The simulation (500 seeded draws) adds random sampling error to each indicator; the error sizes come from <b>assumed</b> effective sample sizes (<code>SE_NEFF</code> in the code), not published NFHS standard errors, so treat tier confidence as illustrative until real district sample sizes are used.</p>" +
+    "<h4>Stability check</h4><p>The Insights tab recomputes the bottom five under " + stability().total + " designs: z-score and min–max scaling, dropping each domain in turn, child marriage in place of schooling, and the original six-pillar index. Districts that stay in the bottom five across most designs are the robust priorities.</p>" +
     "<h4>Derived indicators</h4><ul><li><b>Other modern methods</b> = any modern method − female sterilization − male sterilization.</li><li><b>Home births</b> = 100 − institutional births.</li><li><b>Private facility births</b> = institutional births − institutional births in a public facility.</li><li>District figures are percentage points and are not weighted by district population.</li></ul>" +
     "<h4>Reading the statistics</h4><ul><li><b>Skew</b>: above +0.5 or below −0.5 means a lopsided spread; the mean is pulled toward the long tail.</li><li><b>CV</b> = std dev ÷ mean. <b>Gini</b>: 0 = perfectly even, 1 = one district holds everything.</li><li><b>Correlation (r)</b> shows districts that move together; it does not prove cause. Bold cells use |r| ≥ 0.32 (p &lt; 0.05 for 38 districts).</li><li><b>North / South of the Ganga</b> grouping is by district location (21 north, 17 south).</li></ul>" +
-    '<h4>Data handling and cautions</h4><div class="flag"><ul><li>NFHS flags figures based on 25–49 unweighted cases in parentheses; here they are treated as ordinary values.</li><li>Indicators identical in every district are hidden.</li><li>Three indicators (men married before 21, complementary feeding at 6–8 months, non-breastfeeding adequate diet) are missing in several districts.</li><li>District percentages are unweighted, so smaller districts can swing rankings.</li><li>The composite index uses equal-weight percentiles relative to the other 37 districts, not absolute health targets.</li></ul></div>' +
+    '<h4>Data handling and cautions</h4><div class="flag"><ul><li>NFHS flags figures based on 25–49 unweighted cases in parentheses; here they are treated as ordinary values.</li><li>Indicators identical in every district are hidden.</li><li>Three indicators (men married before 21, complementary feeding at 6–8 months, non-breastfeeding adequate diet) are missing in several districts.</li><li>District percentages are unweighted, so smaller districts can swing rankings.</li><li>The composite index uses equal-weight percentiles relative to the other 37 districts, not absolute health targets.</li><li>State values shown beside district values (scoreboard, brief) are simple averages of the 38 districts, not the official NFHS-6 state estimates.</li></ul></div>' +
     (inc.length
       ? "<h4>Indicators with incomplete coverage (" +
         inc.length +
@@ -3347,12 +4425,14 @@ function about() {
         inc
           .slice(0, 14)
           .map(function (a) {
-            return a[0] + " (" + a[1] + "/" + names.length + ")";
+            return P(a[0]).base + " (" + a[1] + "/" + names.length + ")";
           })
           .join("; ") +
         (inc.length > 14 ? "; …" : "") +
         "</p>"
       : "");
+  var gt = $("#gtour");
+  if (gt) gt.onclick = startTour;
 }
 function aboutOpen(o) {
   if (o) about();
@@ -3367,17 +4447,22 @@ $("#abt").onclick = function (e) {
 addEventListener("keydown", function (e) {
   if (e.key === "Escape") aboutOpen(false);
 });
-/* guided tour */
+$("#p-district").addEventListener("click", function (e) {
+  if (e.target.closest("[data-brief]")) brief(S.sel);
+});
+/* guided tour (started from the About panel) */
 var tr = null;
 function stopTour() {
   if (tr) {
     clearInterval(tr);
     tr = null;
-    $("#tour").textContent = "▶ Tour";
   }
+  var b = $("#gtour");
+  if (b) b.textContent = "▶ Start guided tour";
 }
-$("#tour").onclick = function () {
+function startTour() {
   if (tr) return stopTour();
+  aboutOpen(false);
   var i = 0,
     o = names
       .filter(function (n) {
@@ -3386,14 +4471,15 @@ $("#tour").onclick = function () {
       .sort(function (a, b) {
         return V(b) - V(a);
       });
-  this.textContent = "■ Stop";
+  var b = $("#gtour");
+  if (b) b.textContent = "■ Stop guided tour";
   function go() {
     select(o[i % o.length], true);
     i++;
   }
   go();
   tr = setInterval(go, 3200);
-};
+}
 map.on("click dragstart", stopTour);
 
 /* ---- go ---- */
@@ -3420,14 +4506,3 @@ try {
       );
   }
 } catch (e) {}
-
-// Example of hooking it into your existing Leaflet/Mapbox click event
-function onDistrictClick(e) {
-  const districtProperties = e.target.feature.properties; // From GeoJSON
-  const districtName = districtProperties.District;
-
-  // Pass the mapped NFHS-6 properties to the exporter
-  document.getElementById("btn-export-report").onclick = () => {
-    window.exportDistrictReport(districtName, districtProperties);
-  };
-}
